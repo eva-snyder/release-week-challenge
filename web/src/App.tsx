@@ -271,13 +271,6 @@ function App() {
             >
               sign in with spotify
             </a>
-            <p className="auth-signin__hint">
-              <code>/auth/login</code> → API → Spotify. Cache-bust on each click. Already logged into
-              Spotify? You may see a quick flash — normal.
-            </p>
-            <p className="auth-signin__url" title="Copy this if the link misbehaves">
-              {spotifyLoginHint}
-            </p>
           </div>
         )}
       </div>
