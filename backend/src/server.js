@@ -47,6 +47,8 @@ function resolveWebDistDir() {
 }
 
 const WEB_DIST = resolveWebDistDir()
+const HAS_WEB_DIST =
+  fs.existsSync(WEB_DIST) && fs.existsSync(path.join(WEB_DIST, 'index.html'))
 
 const db = openDb(DB_PATH)
 bootstrapChallengeFromEnvIfEmpty(db)
@@ -243,15 +245,18 @@ app.get('/health', (_req, res) =>
   }),
 )
 
-app.get('/', (_req, res) => {
-  res.type('html').send(`<!DOCTYPE html>
+/** Dev-only hint when the Vite app is not built into `web/dist`. */
+if (!HAS_WEB_DIST) {
+  app.get('/', (_req, res) => {
+    res.type('html').send(`<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>top-listeners API</title></head><body>
-<p>This is the <strong>backend API</strong> only — no page is served at <code>/</code> by design.</p>
+<p>This is the <strong>backend API</strong> only — no page is served at <code>/</code> until you run <code>npm run build</code> in the repo root.</p>
 <p>Open the web app (Vite): <a href="${FRONTEND_ORIGIN}">${FRONTEND_ORIGIN}</a></p>
 <p><a href="/health">GET /health</a> — JSON health check.</p>
 </body></html>`)
-})
+  })
+}
 
 app.get('/auth/login', (req, res) => {
   // Prevent browsers from caching this redirect → Spotify (otherwise “sign in” can skip accounts.spotify.com).
@@ -582,7 +587,7 @@ app.post('/api/admin/ingest-now', requireUser, async (req, res) => {
   res.json({ ok: true })
 })
 
-if (fs.existsSync(WEB_DIST) && fs.existsSync(path.join(WEB_DIST, 'index.html'))) {
+if (HAS_WEB_DIST) {
   app.use(express.static(WEB_DIST, { index: false }))
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next()
@@ -601,7 +606,7 @@ app.listen(PORT, '0.0.0.0', () => {
   )
   // eslint-disable-next-line no-console
   console.log('backend BUILD_ID=%s', BUILD_ID)
-  if (fs.existsSync(WEB_DIST) && fs.existsSync(path.join(WEB_DIST, 'index.html'))) {
+  if (HAS_WEB_DIST) {
     // eslint-disable-next-line no-console
     console.log('serving web app from %s', WEB_DIST)
   }
