@@ -9,6 +9,14 @@ function campaignWindowMsFromEnvOrDefaults() {
   return { starts, ends }
 }
 
+function campaignMetadataFromEnvOrDefaults() {
+  return {
+    title: process.env.CAMPAIGN_TITLE ?? 'Release challenge',
+    trackId: process.env.CAMPAIGN_TRACK_ID ?? '3n3Ppam7vgaVa1iaRUc9Lp',
+    trackName: process.env.CAMPAIGN_TRACK_NAME ?? 'Your Release Song',
+  }
+}
+
 /**
  * @param {import('better-sqlite3').Database} db
  */
@@ -16,9 +24,7 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
   const n = Number(db.prepare('select count(*) as c from challenges').get().c ?? 0)
   if (n > 0) return
 
-  const title = process.env.CAMPAIGN_TITLE ?? 'Release challenge'
-  const trackId = process.env.CAMPAIGN_TRACK_ID ?? '3n3Ppam7vgaVa1iaRUc9Lp'
-  const trackName = process.env.CAMPAIGN_TRACK_NAME ?? 'Your Release Song'
+  const { title, trackId, trackName } = campaignMetadataFromEnvOrDefaults()
   const w = campaignWindowMsFromEnvOrDefaults()
   if (!w) return
   const now = Date.now()
@@ -33,19 +39,18 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
 
 /**
  * Keeps the latest challenge row aligned with `CAMPAIGN_*` env (or code defaults).
- * Needed when the DB was bootstrapped with older dates but env/code were updated.
+ * Needed when the DB was bootstrapped with older dates or placeholder track but env/code were updated.
  * @param {import('better-sqlite3').Database} db
  */
 function syncLatestChallengeWindowFromEnvOrDefaults(db) {
   const w = campaignWindowMsFromEnvOrDefaults()
   if (!w) return
+  const { title, trackId, trackName } = campaignMetadataFromEnvOrDefaults()
   const row = db.prepare('select id from challenges order by id desc limit 1').get()
   if (!row) return
-  db.prepare('update challenges set starts_at_ms = ?, ends_at_ms = ? where id = ?').run(
-    w.starts,
-    w.ends,
-    row.id,
-  )
+  db.prepare(
+    `update challenges set title = ?, track_id = ?, track_name = ?, starts_at_ms = ?, ends_at_ms = ? where id = ?`,
+  ).run(title, trackId, trackName, w.starts, w.ends, row.id)
 }
 
 /**
