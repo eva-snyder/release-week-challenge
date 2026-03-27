@@ -50,11 +50,19 @@ const WEB_DIST = resolveWebDistDir()
 const HAS_WEB_DIST =
   fs.existsSync(WEB_DIST) && fs.existsSync(path.join(WEB_DIST, 'index.html'))
 
+if (!HAS_WEB_DIST) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[startup] web/dist not found (WEB_DIST=%s). Build the Vite app (Dockerfile web-build stage or `npm run build` at repo root). / will show API stub only.',
+    WEB_DIST,
+  )
+}
+
 const db = openDb(DB_PATH)
 bootstrapChallengeFromEnvIfEmpty(db)
 migratePlaysIfNeeded(db)
 
-const BUILD_ID = 'challenges-sqlite-v1'
+const BUILD_ID = 'railway-web-dist-v1'
 
 /** Spotify redirects to 127.0.0.1:8787; persisted so nodemon/restart doesn’t drop OAuth state mid-flow. */
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
@@ -242,6 +250,8 @@ app.get('/health', (_req, res) =>
     build: BUILD_ID,
     dbPath: DB_PATH,
     cwd: process.cwd(),
+    hasWebDist: HAS_WEB_DIST,
+    webDist: WEB_DIST,
   }),
 )
 

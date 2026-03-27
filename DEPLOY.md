@@ -43,11 +43,17 @@ docker run -p 8787:8787 --env-file .env -v top-listeners-data:/data \
 
 Mount `/data` so SQLite survives restarts.
 
-## 5. Providers (pick one)
+## 5. Railway (important)
 
-- **Railway / Render / Fly.io**: Connect the repo, set env vars, add a **volume** for `/data`, set start command to `node src/server.js` with root `WORKDIR` matching the Dockerfile layout **or** use the Dockerfile deploy.
+- **Root directory** for the service must be the **repository root** (where `Dockerfile` and `railway.json` live), **not** `backend`. If the root is `backend`, Railway won’t see the repo `Dockerfile` or build `web/dist`, and you’ll get the “API only” page at `/`.
+- This repo includes **`railway.json`** with `"builder": "DOCKERFILE"` so the image builds the **web** app and copies `web/dist` into the container.
+- After deploy, open **`GET /health`**: `hasWebDist` should be **`true`** and `webDist` should point at the folder containing the built app.
+
+## 6. Providers (pick one)
+
+- **Railway / Render / Fly.io**: Connect the repo, set env vars, add a **volume** for `/data`, use the **Dockerfile** from repo root **or** match the layout in this repo’s `Dockerfile`.
 - **Without Docker**: Run `npm run build` in CI, copy `web/dist` and `backend/`, run `NODE_ENV=production node backend/src/server.js`, persist `data.sqlite`.
 
-## 6. Squarespace marketing site
+## 7. Squarespace marketing site
 
 Link a button to `https://challenge.evasnyder.com`.
