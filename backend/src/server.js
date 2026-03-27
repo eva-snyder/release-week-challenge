@@ -73,7 +73,12 @@ function firstQuery(val) {
   return typeof s === 'string' ? s : String(s)
 }
 
-function normalizeReturnTo(raw) {
+/**
+ * @param {string | null | undefined} raw
+ * @param {{ trustedOrigin?: string | null }} [opts] - Origin of this request (`https://your-app.railway.app`).
+ *        Lets `?return=` match production even when `FRONTEND_ORIGIN` env is still the dev default.
+ */
+function normalizeReturnTo(raw, opts = {}) {
   if (raw == null || raw === '') return null
   const str = typeof raw === 'string' ? raw : String(raw)
   let decoded = str
@@ -82,14 +87,52 @@ function normalizeReturnTo(raw) {
   } catch {
     return null
   }
+  let allowedProdOrigin = null
+  try {
+    allowedProdOrigin = new URL(FRONTEND_ORIGIN).origin
+  } catch {
+    /* ignore */
+  }
+  let trusted = null
+  try {
+    if (opts.trustedOrigin) trusted = new URL(opts.trustedOrigin).origin
+  } catch {
+    /* ignore */
+  }
   try {
     const u = new URL(decoded)
-    if (u.protocol !== 'http:') return null
-    const h = u.hostname
-    if (h !== '127.0.0.1' && h !== 'localhost' && h !== '[::1]') return null
-    return u.origin
+    if (u.protocol === 'http:') {
+      const h = u.hostname
+      if (h !== '127.0.0.1' && h !== 'localhost' && h !== '[::1]') return null
+      return u.origin
+    }
+    if (u.protocol === 'https:') {
+      if (allowedProdOrigin && u.origin === allowedProdOrigin) return u.origin
+      if (trusted && u.origin === trusted) return u.origin
+    }
+    return null
   } catch {
     return null
+  }
+}
+
+/** Where the browser called `/auth/login` (respects `trust proxy` for HTTPS on Railway). */
+function requestOriginForRedirect(req) {
+  try {
+    const host = req.get('host')
+    if (!host) return null
+    return new URL(`${req.protocol}://${host}`).origin
+  } catch {
+    return null
+  }
+}
+
+function isLocalDevOrigin(origin) {
+  try {
+    const h = new URL(origin).hostname
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]'
+  } catch {
+    return true
   }
 }
 
@@ -269,18 +312,27 @@ if (!HAS_WEB_DIST) {
 }
 
 app.get('/auth/login', (req, res) => {
-  // Prevent browsers from caching this redirect → Spotify (otherwise “sign in” can skip accounts.spotify.com).
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
-  const state = randomString(16)
-  const returnTo =
-    normalizeReturnTo(firstQuery(req.query.return)) ??
-    normalizeReturnTo(req.get('referer')) ??
-    FRONTEND_ORIGIN
-  rememberOAuthState(state, returnTo)
-  // eslint-disable-next-line no-console
-  console.log('[auth/login] returnTo=%s query.return=%s', returnTo, firstQuery(req.query.return))
-  res.redirect(302, buildAuthorizeUrl({ state }))
+  try {
+    // Prevent browsers from caching this redirect → Spotify (otherwise “sign in” can skip accounts.spotify.com).
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+    const state = randomString(16)
+    const trustedOrigin = requestOriginForRedirect(req)
+    const returnTo =
+      normalizeReturnTo(firstQuery(req.query.return), { trustedOrigin }) ??
+      normalizeReturnTo(req.get('referer'), { trustedOrigin }) ??
+      (trustedOrigin && !isLocalDevOrigin(trustedOrigin) ? trustedOrigin : null) ??
+      FRONTEND_ORIGIN
+    rememberOAuthState(state, returnTo)
+    // eslint-disable-next-line no-console
+    console.log('[auth/login] returnTo=%s query.return=%s', returnTo, firstQuery(req.query.return))
+    res.redirect(302, buildAuthorizeUrl({ state }))
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    // eslint-disable-next-line no-console
+    console.error('[auth/login]', e)
+    res.status(500).type('text').send(`Login failed: ${msg}`)
+  }
 })
 
 app.get('/auth/callback', async (req, res) => {
