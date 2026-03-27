@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+web/node_modules/
+
+# Env & secrets (keep .env.example)
+.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Local SQLite
+*.sqlite
+*.sqlite-*
+
+# Builds
+web/dist/
+
+# OS / editor
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json

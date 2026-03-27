@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Continue to Spotify</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      a {
+        color: #1db954;
+      }
+    </style>
+  </head>
+  <body>
+    <p>
+      <a id="link" href="#">Continue to Spotify sign-in</a>
+    </p>
+    <p>
+      This page bypasses the React app. Use it if the in-app “sign in” link does nothing in an
+      embedded browser.
+    </p>
+    <script>
+      ;(function () {
+        var q = new URLSearchParams({ return: location.origin })
+        document.getElementById('link').href = '/auth/login?' + q.toString()
+      })()
+    </script>
+  </body>
+</html>

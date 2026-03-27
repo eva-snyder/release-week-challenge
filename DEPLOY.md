@@ -1,0 +1,53 @@
+# Deploying (e.g. `challenge.evasnyder.com`)
+
+One Node process serves the **API** and the **built Vite app** from the same origin. SQLite lives on disk — use a **persistent volume** for `DB_PATH`.
+
+## 1. Build locally (sanity check)
+
+```bash
+npm run build
+NODE_ENV=production FRONTEND_ORIGIN=https://challenge.evasnyder.com node backend/src/server.js
+```
+
+Open `http://127.0.0.1:8787` — you should see the app and `/health` should return JSON.
+
+## 2. Environment variables (production)
+
+| Variable | Notes |
+|----------|--------|
+| `NODE_ENV` | `production` (enables HTTPS cookies, `trust proxy`) |
+| `FRONTEND_ORIGIN` | `https://challenge.evasnyder.com` (exact origin, no trailing slash) |
+| `SPOTIFY_REDIRECT_URI` | `https://challenge.evasnyder.com/auth/callback` |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | From Spotify Developer Dashboard |
+| `SESSION_SECRET` | Long random string |
+| `ARTIST_SPOTIFY_USER_ID` | Your Spotify user id |
+| `DB_PATH` | e.g. `/data/data.sqlite` on a mounted volume |
+| `TRUST_PROXY` | Set to `1` if your host doesn’t set `NODE_ENV` but sits behind HTTPS (optional; often not needed if `NODE_ENV=production`) |
+
+Add the same **Redirect URI** and site URL in the [Spotify app settings](https://developer.spotify.com/dashboard).
+
+## 3. DNS (Squarespace)
+
+Create a **subdomain** `challenge` → **CNAME** to the hostname your host provides (e.g. `xxx.railway.app`, `xxx.onrender.com`). Enable HTTPS on the host.
+
+## 4. Docker (any provider that runs containers)
+
+From the **repository root**:
+
+```bash
+docker build -t top-listeners .
+docker run -p 8787:8787 --env-file .env -v top-listeners-data:/data \
+  -e DB_PATH=/data/data.sqlite \
+  top-listeners
+```
+
+Mount `/data` so SQLite survives restarts.
+
+## 5. Providers (pick one)
+
+- **Railway / Render / Fly.io**: Connect the repo, set env vars, add a **volume** for `/data`, set start command to `node src/server.js` with root `WORKDIR` matching the Dockerfile layout **or** use the Dockerfile deploy.
+- **Without Docker**: Run `npm run build` in CI, copy `web/dist` and `backend/`, run `NODE_ENV=production node backend/src/server.js`, persist `data.sqlite`.
+
+## 6. Squarespace marketing site
+
+Link a button to `https://challenge.evasnyder.com`.

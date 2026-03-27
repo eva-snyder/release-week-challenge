@@ -1,0 +1,83 @@
+:root {
+  --text: #a3b5a6;
+  --text-muted: rgba(163, 181, 166, 0.72);
+  --text-h: #e8f0e9;
+  --bg: #0c1610;
+  --bg-elevated: rgba(255, 255, 255, 0.03);
+  --border: rgba(179, 212, 180, 0.22);
+  --border-strong: rgba(179, 212, 180, 0.38);
+  --accent: #c4e2c5;
+  --accent-soft: rgba(196, 226, 197, 0.12);
+
+  --font-display: 'Fraunces', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-ui: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  font-family: var(--font-ui);
+  font-size: 17px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  font-optical-sizing: auto;
+  color-scheme: dark;
+  color: var(--text);
+  background-color: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+#root {
+  width: min(720px, 100%);
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  padding: 24px 24px 48px;
+}
+
+body {
+  margin: 0;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2.1rem, 5.2vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+  margin: 0 0 0.35em;
+  font-variation-settings: 'SOFT' 50, 'WONK' 0.8;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--text-h);
+  margin: 0 0 0.5em;
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  padding: 0.12em 0.35em;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-h);
+}

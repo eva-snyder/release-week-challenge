@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+web/node_modules
+backend/node_modules
+.git
+*.sqlite
+backend/data.sqlite
+.env
+**/.env
+dist
+web/dist
+.DS_Store

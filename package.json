@@ -1,0 +1,9 @@
+{
+  "name": "top-listeners",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix web",
+    "start": "node backend/src/server.js",
+    "start:prod": "NODE_ENV=production node backend/src/server.js"
+  }
+}
