@@ -18,6 +18,7 @@ const {
 const { ingestOnce: runIngestOnce } = require('./ingest')
 const {
   bootstrapChallengeFromEnvIfEmpty,
+  syncLatestChallengeWindowFromEnvOrDefaults,
   getActiveChallengeForIngest,
   getChallengeForDisplay,
   rowToCampaignPayload,
@@ -60,6 +61,7 @@ if (!HAS_WEB_DIST) {
 
 const db = openDb(DB_PATH)
 bootstrapChallengeFromEnvIfEmpty(db)
+syncLatestChallengeWindowFromEnvOrDefaults(db)
 migratePlaysIfNeeded(db)
 
 const BUILD_ID = 'railway-web-dist-v1'

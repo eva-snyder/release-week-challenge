@@ -1,3 +1,14 @@
+/** Default window when env not set: 2026-03-27 → 2026-04-04 UTC (7 days; `ends` is exclusive in ingest). */
+const DEFAULT_CAMPAIGN_STARTS_AT = '2026-03-27T00:00:00Z'
+const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-04T00:00:00Z'
+
+function campaignWindowMsFromEnvOrDefaults() {
+  const starts = Date.parse(process.env.CAMPAIGN_STARTS_AT ?? DEFAULT_CAMPAIGN_STARTS_AT)
+  const ends = Date.parse(process.env.CAMPAIGN_ENDS_AT ?? DEFAULT_CAMPAIGN_ENDS_AT)
+  if (!Number.isFinite(starts) || !Number.isFinite(ends)) return null
+  return { starts, ends }
+}
+
 /**
  * @param {import('better-sqlite3').Database} db
  */
@@ -8,8 +19,8 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
   const title = process.env.CAMPAIGN_TITLE ?? 'Release challenge'
   const trackId = process.env.CAMPAIGN_TRACK_ID ?? '3n3Ppam7vgaVa1iaRUc9Lp'
   const trackName = process.env.CAMPAIGN_TRACK_NAME ?? 'Your Release Song'
-  const starts = Date.parse(process.env.CAMPAIGN_STARTS_AT ?? '2026-05-06T00:00:00Z')
-  const ends = Date.parse(process.env.CAMPAIGN_ENDS_AT ?? '2026-05-13T00:00:00Z')
+  const w = campaignWindowMsFromEnvOrDefaults()
+  if (!w) return
   const now = Date.now()
 
   db.prepare(
@@ -17,7 +28,24 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
     insert into challenges (title, track_id, track_name, starts_at_ms, ends_at_ms, created_at_ms)
     values (?, ?, ?, ?, ?, ?)
   `,
-  ).run(title, trackId, trackName, starts, ends, now)
+  ).run(title, trackId, trackName, w.starts, w.ends, now)
+}
+
+/**
+ * Keeps the latest challenge row aligned with `CAMPAIGN_*` env (or code defaults).
+ * Needed when the DB was bootstrapped with older dates but env/code were updated.
+ * @param {import('better-sqlite3').Database} db
+ */
+function syncLatestChallengeWindowFromEnvOrDefaults(db) {
+  const w = campaignWindowMsFromEnvOrDefaults()
+  if (!w) return
+  const row = db.prepare('select id from challenges order by id desc limit 1').get()
+  if (!row) return
+  db.prepare('update challenges set starts_at_ms = ?, ends_at_ms = ? where id = ?').run(
+    w.starts,
+    w.ends,
+    row.id,
+  )
 }
 
 /**
@@ -87,6 +115,7 @@ function rowToCampaignPayload(row, status) {
 
 module.exports = {
   bootstrapChallengeFromEnvIfEmpty,
+  syncLatestChallengeWindowFromEnvOrDefaults,
   getActiveChallengeForIngest,
   getChallengeForDisplay,
   rowToCampaignPayload,

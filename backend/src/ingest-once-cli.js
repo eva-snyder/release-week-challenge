@@ -9,12 +9,14 @@ const { openDb, migratePlaysIfNeeded } = require('./db')
 const { ingestOnce } = require('./ingest')
 const {
   bootstrapChallengeFromEnvIfEmpty,
+  syncLatestChallengeWindowFromEnvOrDefaults,
   getActiveChallengeForIngest,
 } = require('./challenges')
 
 const DB_PATH = process.env.DB_PATH ?? './data.sqlite'
 const db = openDb(DB_PATH)
 bootstrapChallengeFromEnvIfEmpty(db)
+syncLatestChallengeWindowFromEnvOrDefaults(db)
 migratePlaysIfNeeded(db)
 
 const ch = getActiveChallengeForIngest(db)
