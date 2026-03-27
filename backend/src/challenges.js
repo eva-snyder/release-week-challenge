@@ -12,8 +12,8 @@ function campaignWindowMsFromEnvOrDefaults() {
 function campaignMetadataFromEnvOrDefaults() {
   return {
     title: process.env.CAMPAIGN_TITLE ?? 'Release challenge',
-    trackId: process.env.CAMPAIGN_TRACK_ID ?? '3n3Ppam7vgaVa1iaRUc9Lp',
-    trackName: process.env.CAMPAIGN_TRACK_NAME ?? 'Your Release Song',
+    trackId: process.env.CAMPAIGN_TRACK_ID ?? '3aFYGT0C4zbMH6EQ1kdqcf',
+    trackName: process.env.CAMPAIGN_TRACK_NAME ?? 'turkeys',
   }
 }
 
