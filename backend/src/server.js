@@ -118,12 +118,22 @@ function normalizeReturnTo(raw, opts = {}) {
   }
 }
 
-/** Where the browser called `/auth/login` (respects `trust proxy` for HTTPS on Railway). */
+/**
+ * Public origin for `/auth/login` → OAuth return target.
+ * Prefer proxy headers (Railway, etc.): mobile clients sometimes lack a reliable `req.protocol`.
+ */
 function requestOriginForRedirect(req) {
   try {
-    const host = req.get('host')
+    const host = (req.get('x-forwarded-host') || req.get('host') || '').trim()
     if (!host) return null
-    return new URL(`${req.protocol}://${host}`).origin
+    const xfProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase()
+    let proto = xfProto === 'https' || xfProto === 'http' ? xfProto : null
+    if (!proto) {
+      if (req.secure) proto = 'https'
+      else if (req.protocol === 'https') proto = 'https'
+      else proto = 'http'
+    }
+    return new URL(`${proto}://${host}`).origin
   } catch {
     return null
   }
