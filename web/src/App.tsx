@@ -1,5 +1,6 @@
 import './App.css'
 import { useEffect, useMemo, useState } from 'react'
+import { FinishSignIn } from './FinishSignIn'
 import {
   apiFetch,
   clearStoredSessionId,
@@ -71,6 +72,10 @@ async function runOAuthHandoffOnce(
 }
 
 function App() {
+  if (typeof window !== 'undefined' && window.location.pathname === '/auth/finish') {
+    return <FinishSignIn />
+  }
+
   const [ready, setReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -294,12 +299,8 @@ function App() {
               sign in with last.fm
             </a>
             <p className="auth-hint body-quiet">
-              On Last.fm, confirm access for this app (not only cookie banners). If the site doesn’t send
-              you back here, copy <code>token=…</code> from the Last.fm address bar and open{' '}
-              <code>
-                {typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?token=PASTE
-              </code>{' '}
-              in this browser.
+              Stuck after Last.fm?{' '}
+              <a href="/auth/finish">Paste your Last.fm URL here</a> — we’ll finish sign-in for you.
             </p>
           </div>
         )}

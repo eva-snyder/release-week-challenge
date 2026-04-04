@@ -724,7 +724,11 @@ if (HAS_WEB_DIST) {
   app.use(express.static(WEB_DIST, { index: false }))
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next()
-    if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
+    if (req.path.startsWith('/api') || req.path === '/health') {
+      return next()
+    }
+    // SPA routes under /auth/* (except real API routes registered above)
+    if (req.path.startsWith('/auth') && req.path !== '/auth/finish') {
       return next()
     }
     res.sendFile(path.join(WEB_DIST, 'index.html'), (err) => next(err))
