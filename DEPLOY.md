@@ -2,6 +2,8 @@
 
 One Node process serves the **API** and the **built Vite app** from the same origin. SQLite lives on disk — use a **persistent volume** for `DB_PATH`.
 
+**Replicas:** Run **exactly one** instance per SQLite database. OAuth state and sessions are stored in SQLite; if the load balancer sends `/auth/login` to instance A and `/auth/callback` to instance B, Last.fm login will fail or you will look “logged out” until you scale down to one replica (or move to a shared database).
+
 ## 1. Build locally (sanity check)
 
 ```bash

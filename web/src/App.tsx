@@ -176,7 +176,14 @@ function App() {
       const url = new URL(window.location.href)
       const authError = url.searchParams.get('auth_error')
       const oauthSession = url.searchParams.get('oauth_session')
-      if (authError) throw new Error(authError)
+      if (authError) {
+        if (authError === 'oauth_state_invalid_retry_sign_in') {
+          throw new Error(
+            'Sign-in expired between Last.fm and the app — try again. If it keeps failing on Railway: set service replicas to 1 (SQLite auth breaks with multiple instances), and set FRONTEND_ORIGIN to your exact site URL.',
+          )
+        }
+        throw new Error(authError)
+      }
 
       if (url.searchParams.has('connected')) {
         url.searchParams.delete('connected')
@@ -203,7 +210,9 @@ function App() {
             nextSession.user.display_name?.trim() || nextSession.user.lastfm_username
           setNotice(`signed in as ${who}`)
         } else {
-          setNotice('handoff succeeded but session check failed — refresh and ensure the API on :8787 is running.')
+          setNotice(
+            'Signed in with Last.fm but the app could not load your session. On production: confirm Railway replicas = 1 (SQLite), FRONTEND_ORIGIN matches this URL, then refresh. Locally: ensure the backend on :8787 is running.',
+          )
         }
       }
     })

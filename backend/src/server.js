@@ -65,6 +65,13 @@ migratePlaysIfNeeded(db)
 
 const BUILD_ID = 'lastfm-v1'
 
+if (IS_PRODUCTION) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[startup] OAuth + sessions use SQLite on this machine. Use exactly one replica (or shared DB); multiple instances break Last.fm login.',
+  )
+}
+
 /** Last.fm auth token stored in oauth_states until /auth/callback. */
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
 
@@ -76,8 +83,7 @@ function firstQuery(val) {
 
 /**
  * @param {string | null | undefined} raw
- * @param {{ trustedOrigin?: string | null }} [opts] - Origin of this request (`https://your-app.railway.app`).
- *        Lets `?return=` match production even when `FRONTEND_ORIGIN` env is still the dev default.
+ * @param {{ trustedOrigin?: string | null, requestHostname?: string | null }} [opts] requestHostname = Express req.hostname (trust proxy); allows ?return= to match live host if FRONTEND_ORIGIN is wrong
  */
 function normalizeReturnTo(raw, opts = {}) {
   if (raw == null || raw === '') return null
@@ -110,6 +116,8 @@ function normalizeReturnTo(raw, opts = {}) {
     if (u.protocol === 'https:') {
       if (allowedProdOrigin && u.origin === allowedProdOrigin) return u.origin
       if (trusted && u.origin === trusted) return u.origin
+      const rh = opts.requestHostname
+      if (rh && u.hostname === rh) return u.origin
     }
     return null
   } catch {
@@ -327,9 +335,10 @@ app.get('/auth/login', async (req, res) => {
     res.setHeader('Pragma', 'no-cache')
     const token = await authGetToken()
     const trustedOrigin = requestOriginForRedirect(req)
+    const hostMatch = { trustedOrigin, requestHostname: req.hostname || null }
     const returnTo =
-      normalizeReturnTo(firstQuery(req.query.return), { trustedOrigin }) ??
-      normalizeReturnTo(req.get('referer'), { trustedOrigin }) ??
+      normalizeReturnTo(firstQuery(req.query.return), hostMatch) ??
+      normalizeReturnTo(req.get('referer'), hostMatch) ??
       (trustedOrigin && !isLocalDevOrigin(trustedOrigin) ? trustedOrigin : null) ??
       FRONTEND_ORIGIN
     rememberOAuthState(token, returnTo)
@@ -407,6 +416,8 @@ app.get('/auth/callback', async (req, res) => {
 
     const handoff = randomString(32)
     rememberSessionHandoff(handoff, sessionId)
+    // eslint-disable-next-line no-console
+    console.log('[auth/callback] ok user=%s returnTo=%s', username, returnTo)
     // Do not Set-Cookie on this cross-site redirect — Safari drops it. SPA POSTs /auth/handoff.
     res.redirect(
       `${returnTo}/?oauth_session=${encodeURIComponent(handoff)}`,
