@@ -20,7 +20,7 @@ function sanitizeProductionBackend(raw: string): string {
   return u.origin
 }
 
-/** Shown in UI. In dev, the browser never calls :8787 directly for fetch() — Vite proxies. */
+/** Dev helper (not used in UI). In dev, the browser never calls :8787 directly for fetch() — Vite proxies. */
 export function getBackendOrigin(): string {
   if (import.meta.env.PROD && import.meta.env.VITE_BACKEND_ORIGIN?.trim()) {
     return sanitizeProductionBackend(import.meta.env.VITE_BACKEND_ORIGIN.trim())

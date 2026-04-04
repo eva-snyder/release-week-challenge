@@ -57,14 +57,7 @@ async function runOAuthHandoffOnce(
     })
     const raw = await res.text()
     if (!res.ok) {
-      let msg = raw
-      try {
-        const j = JSON.parse(raw) as { error?: string }
-        if (j.error) msg = j.error
-      } catch {
-        /* keep raw */
-      }
-      throw new Error(msg || 'could not attach session')
+      throw new Error('Could not finish signing in. Try again.')
     }
     onSuccess(raw)
   })()
@@ -113,7 +106,7 @@ function App() {
       raw === 'Load failed' ||
       /NetworkError|network request failed/i.test(raw)
     ) {
-      return `Can't reach the API. Run both dev servers: (1) backend: cd backend && npm run dev  →  port 8787. (2) frontend: cd web && npm run dev  →  port 5173. Then open the URL Vite prints (e.g. http://127.0.0.1:5173).`
+      return `Can't connect right now. Check your connection and try again.`
     }
     return raw
   }
@@ -163,12 +156,12 @@ function App() {
     }
 
     const cRes = await apiFetch('/api/campaign')
-    if (!cRes.ok) throw new Error(await cRes.text())
+    if (!cRes.ok) throw new Error('Could not load the challenge.')
     const cJson = await cRes.json()
     setCampaign(cJson.campaign)
 
     const lbRes = await apiFetch('/api/leaderboard?limit=10')
-    if (!lbRes.ok) throw new Error(await lbRes.text())
+    if (!lbRes.ok) throw new Error('Could not load the leaderboard.')
     const lbJson = await lbRes.json()
     setLeaderboard(lbJson.rows ?? [])
 
@@ -275,11 +268,9 @@ function App() {
       const oauthSession = url.searchParams.get('oauth_session')
       if (authError) {
         if (authError === 'oauth_state_invalid_retry_sign_in') {
-          throw new Error(
-            'Sign-in expired between Last.fm and the app — try again. If it keeps failing on Railway: set service replicas to 1 (SQLite auth breaks with multiple instances), and set FRONTEND_ORIGIN to your exact site URL.',
-          )
+          throw new Error('That sign-in link expired. Try signing in again.')
         }
-        throw new Error(authError)
+        throw new Error('Sign-in didn’t work. Try again.')
       }
 
       if (url.searchParams.has('connected')) {
@@ -317,9 +308,7 @@ function App() {
             nextSession.user.display_name?.trim() || nextSession.user.lastfm_username
           setNotice(`signed in as ${who}`)
         } else {
-          setNotice(
-            'Signed in with Last.fm but the app could not load your session. On production: confirm Railway replicas = 1 (SQLite), FRONTEND_ORIGIN matches this URL, then refresh. Locally: ensure the backend on :8787 is running.',
-          )
+          setNotice('Signed in with Last.fm, but we could not load your account. Try refreshing the page.')
         }
       }
     })
@@ -368,7 +357,7 @@ function App() {
               onClick={() =>
                 run(async () => {
                   const lr = await apiFetch('/auth/logout', { method: 'POST' })
-                  if (!lr.ok) throw new Error(await lr.text())
+                  if (!lr.ok) throw new Error('Could not log out. Try again.')
                   clearStoredSessionId()
                   setSession(null)
                   setLeaderboard([])
@@ -557,7 +546,7 @@ function App() {
                   const res = await apiFetch('/api/admin/ingest-now', {
                     method: 'POST',
                   })
-                  if (!res.ok) throw new Error(await res.text())
+                  if (!res.ok) throw new Error('Could not load the latest plays. Try again.')
                   await refreshDashboard()
                 })
               }
@@ -612,11 +601,6 @@ function App() {
         <p className="footer__line">
           counts use last.fm scrobbles — connect spotify (or your player) to last.fm so listens show up. prize
           contact may use your last.fm username or a separate process you run as the artist.
-        </p>
-        <p className="footer__line footer__line--meta">
-          <a href="/health">api status</a> — if sign-in fails, check{' '}
-          <code>frontendOrigin</code> matches this site and note <code>instanceId</code> in Railway logs for
-          login vs callback (must match one replica).
         </p>
       </footer>
     </div>
