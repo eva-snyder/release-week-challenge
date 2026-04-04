@@ -341,6 +341,85 @@ function App() {
   const showComingSoonBanner =
     ready && (campaign?.status === 'ended' || campaign === null)
 
+  const playsSection = (
+    <section className="band" aria-labelledby="stats-heading">
+      <p className="eyebrow" id="stats-label">
+        {session ? '01 — you' : '02 — you'}
+      </p>
+      <h2 id="stats-heading">your plays</h2>
+      {session ? (
+        <div className="stat-row">
+          <div className="stat">
+            <span className="stat__label">plays this window</span>
+            <span className="stat__value">{myStats?.mine.plays ?? 0}</span>
+          </div>
+          <div className="stat">
+            <span className="stat__label">rank</span>
+            <span className="stat__value">
+              {myStats?.mine.rank != null ? `#${myStats.mine.rank}` : '—'}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <p className="body-quiet">
+          sign in to see your plays and rank.{' '}
+          <button
+            type="button"
+            className="btn btn--text btn--inline"
+            onClick={() => setLastfmSetupOpen(true)}
+          >
+            new to last.fm?
+          </button>
+        </p>
+      )}
+    </section>
+  )
+
+  const leaderboardSection = (
+    <section className="band" aria-labelledby="lb-heading">
+      <div className="band__head">
+        <div>
+          <p className="eyebrow" id="lb-label">
+            {session ? '02 — everyone' : '01 — everyone'}
+          </p>
+          <h2 id="lb-heading">leaderboard</h2>
+          <p className="body-quiet body-quiet--tight">top ten for this challenge window.</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn--text"
+          disabled={busy}
+          onClick={() => run(async () => refreshDashboard())}
+        >
+          refresh
+        </button>
+      </div>
+
+      <div className="lb-table" role="table" aria-label="Leaderboard">
+        <div className="lb-row lb-row--head" role="row">
+          <span role="columnheader">#</span>
+          <span role="columnheader">listener</span>
+          <span role="columnheader">plays</span>
+        </div>
+        {leaderboard.length === 0 ? (
+          <p className="lb-empty">no plays recorded yet.</p>
+        ) : (
+          leaderboard.map((row, i) => (
+            <div className="lb-row" key={row.lastfm_username} role="row">
+              <span className="lb-rank" role="cell">
+                {i + 1}
+              </span>
+              <span role="cell">{row.display_name ?? 'listener'}</span>
+              <span className="lb-plays" role="cell">
+                {row.plays}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  )
+
   return (
     <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
       <div className={`auth-bar${!session ? ' auth-bar--signed-out-mobile' : ''}`} aria-label="Account">
@@ -449,80 +528,17 @@ function App() {
       ) : null}
 
       <main className="main">
-        <section className="band" aria-labelledby="stats-heading">
-          <p className="eyebrow" id="stats-label">
-            01 — you
-          </p>
-          <h2 id="stats-heading">your plays</h2>
-          {session ? (
-            <div className="stat-row">
-              <div className="stat">
-                <span className="stat__label">plays this window</span>
-                <span className="stat__value">{myStats?.mine.plays ?? 0}</span>
-              </div>
-              <div className="stat">
-                <span className="stat__label">rank</span>
-                <span className="stat__value">
-                  {myStats?.mine.rank != null ? `#${myStats.mine.rank}` : '—'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="body-quiet">
-              sign in above to count plays for this track.{' '}
-              <button
-                type="button"
-                className="btn btn--text btn--inline"
-                onClick={() => setLastfmSetupOpen(true)}
-              >
-                new to last.fm?
-              </button>
-            </p>
-          )}
-        </section>
-
-        <section className="band" aria-labelledby="lb-heading">
-          <div className="band__head">
-            <div>
-              <p className="eyebrow" id="lb-label">
-                02 — everyone
-              </p>
-              <h2 id="lb-heading">leaderboard</h2>
-              <p className="body-quiet body-quiet--tight">top ten for this challenge window.</p>
-            </div>
-            <button
-              type="button"
-              className="btn btn--text"
-              disabled={busy}
-              onClick={() => run(async () => refreshDashboard())}
-            >
-              refresh
-            </button>
-          </div>
-
-          <div className="lb-table" role="table" aria-label="Leaderboard">
-            <div className="lb-row lb-row--head" role="row">
-              <span role="columnheader">#</span>
-              <span role="columnheader">listener</span>
-              <span role="columnheader">plays</span>
-            </div>
-            {leaderboard.length === 0 ? (
-              <p className="lb-empty">no plays recorded yet.</p>
-            ) : (
-              leaderboard.map((row, i) => (
-                <div className="lb-row" key={row.lastfm_username} role="row">
-                  <span className="lb-rank" role="cell">
-                    {i + 1}
-                  </span>
-                  <span role="cell">{row.display_name ?? 'listener'}</span>
-                  <span className="lb-plays" role="cell">
-                    {row.plays}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+        {session ? (
+          <>
+            {playsSection}
+            {leaderboardSection}
+          </>
+        ) : (
+          <>
+            {leaderboardSection}
+            {playsSection}
+          </>
+        )}
 
         {session?.user.is_artist ? (
           <section className="band band--artist" aria-labelledby="artist-heading">

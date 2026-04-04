@@ -62,8 +62,8 @@
     position: static;
     left: auto;
     justify-content: stretch;
-    padding: 8px 0 10px;
-    margin: 0 0 4px;
+    padding: 2px 0 8px;
+    margin: 0 0 2px;
     border-bottom: 1px solid var(--border);
     background: var(--bg);
   }
