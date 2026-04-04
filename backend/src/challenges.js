@@ -141,6 +141,8 @@ function getChallengeForDisplay(db, now = Date.now()) {
 }
 
 function rowToCampaignPayload(row, status) {
+  const spotifyTrackId =
+    String(process.env.CAMPAIGN_SPOTIFY_TRACK_ID ?? process.env.CAMPAIGN_TRACK_ID ?? '').trim() || null
   return {
     id: String(row.id),
     title: row.title,
@@ -152,6 +154,8 @@ function rowToCampaignPayload(row, status) {
     startsAtMs: row.starts_at_ms,
     endsAtMs: row.ends_at_ms,
     status,
+    /** Spotify track id for open.spotify.com links (from env, not stored per challenge row). */
+    spotifyTrackId,
   }
 }
 

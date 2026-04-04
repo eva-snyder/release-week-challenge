@@ -35,6 +35,14 @@ type Campaign = {
   startsAtMs: number
   endsAtMs: number
   status: 'upcoming' | 'live' | 'ended'
+  /** Spotify track id when set in server env (CAMPAIGN_SPOTIFY_TRACK_ID / CAMPAIGN_TRACK_ID). */
+  spotifyTrackId?: string | null
+}
+
+function spotifyOpenUrl(c: Campaign): string {
+  const id = c.spotifyTrackId?.trim()
+  if (id) return `https://open.spotify.com/track/${id}`
+  return `https://open.spotify.com/search/${encodeURIComponent(`${c.trackName} ${c.trackArtist}`.trim())}`
 }
 
 /** After opening Last.fm in the same browser, we poll until auth.getSession succeeds (Last.fm may not redirect to /auth/callback). */
@@ -916,16 +924,30 @@ function App() {
             hi, {session.user.display_name?.trim() || session.user.lastfm_username}
           </p>
         ) : null}
-        <h1 className="hero__title">eva's release week challenge</h1>
-        <p className="hero__lede">
-          {!ready ? 'loading…' : campaign?.title ?? 'no challenge yet.'}
-          {campaign ? (
-            <>
-              {' '}
-              · <code>{campaign.trackArtist}</code> — <code>{campaign.trackName}</code>
-            </>
-          ) : null}
-        </p>
+        <h1 className="hero__title">eva snyder</h1>
+        {!ready ? (
+          <p className="hero__lede">loading…</p>
+        ) : campaign ? (
+          <>
+            <p className="hero__tagline">
+              be the top listener this week to win limited edition merch!
+            </p>
+            <p className="hero__track">
+              <span className="hero__track-label">this week&apos;s challenge track:</span>{' '}
+              <a
+                className="hero__track-link"
+                href={spotifyOpenUrl(campaign)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {campaign.trackName}
+              </a>
+              <span className="hero__track-by"> — {campaign.trackArtist}</span>
+            </p>
+          </>
+        ) : (
+          <p className="hero__lede">no challenge yet.</p>
+        )}
         <p className="hero__meta">
           {campaign ? (
             <>
