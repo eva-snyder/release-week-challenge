@@ -265,13 +265,40 @@ function setCookie(res, name, value, opts = {}) {
   })
 }
 
-function clearCookie(res, name) {
+function clearCookie(res, name, extra = {}) {
   res.clearCookie(name, {
     httpOnly: true,
     sameSite: 'lax',
     secure: IS_PRODUCTION,
     signed: true,
+    path: '/',
+    ...extra,
   })
+}
+
+const OAUTH_RT_COOKIE = 'oauth_rt'
+
+/**
+ * When SQLite oauth_states misses (multiple Node processes / replicas), recover return URL from
+ * this signed cookie set on GET /auth/login before redirecting to Last.fm.
+ */
+function readReturnToFromOAuthCookie(req) {
+  const raw = req.signedCookies?.[OAUTH_RT_COOKIE]
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    const j = JSON.parse(raw)
+    const ts = Number(j.ts || 0)
+    if (!Number.isFinite(ts) || Date.now() - ts > OAUTH_STATE_TTL_MS) return null
+    if (typeof j.returnTo !== 'string' || !j.returnTo.trim()) return null
+    const trustedOrigin = requestOriginForRedirect(req)
+    const hostMatch = { trustedOrigin, requestHostname: req.hostname || null }
+    const n =
+      normalizeReturnTo(j.returnTo, hostMatch) ||
+      (originEquals(j.returnTo, FRONTEND_ORIGIN) ? FRONTEND_ORIGIN : null)
+    return n
+  } catch {
+    return null
+  }
 }
 
 /** Signed cookie or Authorization: Bearer <raw session_id> (SPA fallback when cookies fail cross-port). */
@@ -334,9 +361,9 @@ app.get('/health', (_req, res) =>
     sqliteOAuthNote:
       'OAuth state is stored in SQLite on this process. Multiple replicas without sticky sessions break Last.fm login.',
     railwayChecklist: [
-      'Set service replicas to 1 (Settings → Deploy → Replicas) unless you use a shared database.',
+      'If instanceId differs between two /health requests without a redeploy, multiple processes are serving traffic — SQLite sessions will not line up. Scale to one container or use a shared database.',
       'Last.fm app callback URL must be exactly: ' + FRONTEND_ORIGIN + '/auth/callback',
-      'After login, compare [auth/login] and [auth/callback] instance= lines in deploy logs — they must match.',
+      'OAuth return URL is also stored in a signed cookie (oauth_rt) so /auth/callback works even when oauth_states misses another Node process.',
     ],
     dbPath: DB_PATH,
     cwd: process.cwd(),
@@ -371,6 +398,10 @@ app.get('/auth/login', async (req, res) => {
       (trustedOrigin && !isLocalDevOrigin(trustedOrigin) ? trustedOrigin : null) ??
       FRONTEND_ORIGIN
     rememberOAuthState(token, returnTo)
+    setCookie(res, OAUTH_RT_COOKIE, JSON.stringify({ returnTo, ts: Date.now() }), {
+      maxAge: OAUTH_STATE_TTL_MS,
+      path: '/',
+    })
     const lastfmCallbackAbs = `${FRONTEND_ORIGIN.replace(/\/$/, '')}/auth/callback`
     // eslint-disable-next-line no-console
     console.log(
@@ -393,6 +424,7 @@ app.get('/auth/callback', async (req, res) => {
   try {
     const token = firstQuery(req.query.token)?.trim()
     if (!token) {
+      clearCookie(res, OAUTH_RT_COOKIE)
       return res.redirect(
         302,
         `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('missing_lastfm_token')}`,
@@ -400,19 +432,21 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     const consumed = consumeOAuthState(token)
+    let returnTo = consumed?.returnTo ?? null
+    if (!returnTo) {
+      returnTo = readReturnToFromOAuthCookie(req)
+    }
+    if (!returnTo) {
+      returnTo = FRONTEND_ORIGIN
+    }
     if (!consumed) {
       // eslint-disable-next-line no-console
       console.warn(
-        '[auth/callback] oauth_state miss instance=%s token_len=%s (wrong replica / expired / new API keys without fresh login?)',
+        '[auth/callback] oauth_states miss on this instance=%s — using cookie or FRONTEND_ORIGIN for returnTo',
         INSTANCE_ID,
-        String(token).length,
-      )
-      return res.redirect(
-        302,
-        `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('oauth_state_invalid_retry_sign_in')}`,
       )
     }
-    const returnTo = consumed.returnTo
+    clearCookie(res, OAUTH_RT_COOKIE)
 
     const { sessionKey, username } = await authGetSession(token)
     const displayName = username
@@ -466,6 +500,7 @@ app.get('/auth/callback', async (req, res) => {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     // eslint-disable-next-line no-console
     console.error('[auth/callback]', e)
+    clearCookie(res, OAUTH_RT_COOKIE)
     return res.redirect(
       302,
       `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent(msg)}`,
