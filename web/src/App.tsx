@@ -1,12 +1,12 @@
 import './App.css'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FinishSignIn } from './FinishSignIn'
+import { LastfmSetupModal } from './LastfmSetupModal'
 import {
   apiFetch,
   clearStoredSessionId,
   setStoredSessionId,
   lastfmLoginUrl,
-  LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL,
 } from './authUrl'
 
 type Session = {
@@ -99,6 +99,7 @@ function App() {
   const [lastfmFinishing, setLastfmFinishing] = useState(false)
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
+  const [lastfmSetupOpen, setLastfmSetupOpen] = useState(false)
 
   function formatNetworkError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e)
@@ -341,7 +342,7 @@ function App() {
     ready && (campaign?.status === 'ended' || campaign === null)
 
   return (
-    <div className="page app-lowercase">
+    <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
       <div className="auth-bar" aria-label="Account">
         {session ? (
           <>
@@ -389,18 +390,16 @@ function App() {
               >
                 sign in with last.fm
               </a>
-              <a
+              <button
+                type="button"
                 className="btn btn--ghost"
-                href={LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => setLastfmSetupOpen(true)}
               >
-                new? set up last.fm + Spotify
-              </a>
+                new to last.fm?
+              </button>
             </div>
             <p className="auth-hint body-quiet">
-              Sign-in opens in a new tab. After you approve, come back here — we’ll finish automatically. Or{' '}
-              <a href="/auth/finish">paste the Last.fm URL</a> if you’re on another device.
+              <a href="/auth/finish">other device?</a> paste your link to finish.
             </p>
           </div>
         )}
@@ -473,15 +472,14 @@ function App() {
             </div>
           ) : (
             <p className="body-quiet">
-              sign in with last.fm to count plays for this track.{' '}
-              <a
-                href={LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+              sign in above to count plays for this track.{' '}
+              <button
+                type="button"
+                className="btn btn--text btn--inline"
+                onClick={() => setLastfmSetupOpen(true)}
               >
-                no last.fm yet?
-              </a>{' '}
-              that page helps you create an account and connect Spotify so scrobbles show up.
+                new to last.fm?
+              </button>
             </p>
           )}
         </section>
@@ -621,6 +619,8 @@ function App() {
           contact may use your last.fm username or a separate process you run as the artist.
         </p>
       </footer>
+
+      <LastfmSetupModal open={lastfmSetupOpen} onClose={() => setLastfmSetupOpen(false)} />
     </div>
   )
 }
