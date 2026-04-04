@@ -37,11 +37,18 @@ type Campaign = {
   status: 'upcoming' | 'live' | 'ended'
   /** Spotify track id when set in server env (CAMPAIGN_SPOTIFY_TRACK_ID / CAMPAIGN_TRACK_ID). */
   spotifyTrackId?: string | null
+  /** Optional Spotify `si` query param (CAMPAIGN_SPOTIFY_SI / CAMPAIGN_TRACK_SI). */
+  spotifyTrackSi?: string | null
 }
 
 function spotifyOpenUrl(c: Campaign): string {
   const id = c.spotifyTrackId?.trim()
-  if (id) return `https://open.spotify.com/track/${id}`
+  if (id) {
+    const si = c.spotifyTrackSi?.trim()
+    const base = `https://open.spotify.com/track/${id}`
+    if (si) return `${base}?si=${encodeURIComponent(si)}`
+    return base
+  }
   return `https://open.spotify.com/search/${encodeURIComponent(`${c.trackName} ${c.trackArtist}`.trim())}`
 }
 
