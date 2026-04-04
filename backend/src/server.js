@@ -1,5 +1,6 @@
 require('dotenv').config()
 
+const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const express = require('express')
@@ -20,6 +21,7 @@ const INSTANCE_ID = randomString(8)
 const { ingestOnce: runIngestOnce } = require('./ingest')
 const {
   bootstrapChallengeFromEnvIfEmpty,
+  insertChallenge,
   syncLatestChallengeWindowFromEnvOrDefaults,
   getActiveChallengeForIngest,
   getChallengeForDisplay,
@@ -369,6 +371,38 @@ function getSessionIdFromRequest(req) {
   return null
 }
 
+/**
+ * Single prize winner for a challenge. If several users tie for max plays, one is chosen
+ * deterministically (same for every request) using PRIZE_TIE_BREAK_SECRET or SESSION_SECRET.
+ * @returns {number | null} user id or null if nobody has plays for this challenge
+ */
+function getPrizeTieBreakUserId(db, challengeId) {
+  const rows = db
+    .prepare(
+      `
+      select p.user_id as user_id, count(*) as plays
+      from plays p
+      where p.challenge_id = ?
+      group by p.user_id
+      order by plays desc
+    `,
+    )
+    .all(challengeId)
+  if (rows.length === 0) return null
+  const maxPlays = Number(rows[0].plays)
+  const tied = rows.filter((r) => Number(r.plays) === maxPlays).map((r) => r.user_id)
+  if (tied.length === 0) return null
+  if (tied.length === 1) return tied[0]
+  const sorted = [...tied].sort((a, b) => a - b)
+  const salt = String(
+    process.env.PRIZE_TIE_BREAK_SECRET ?? process.env.SESSION_SECRET ?? 'dev-prize-tie-break',
+  )
+  const payload = `${challengeId}:${sorted.join(',')}:${salt}`
+  const hash = crypto.createHash('sha256').update(payload).digest()
+  const idx = hash.readUInt32BE(0) % sorted.length
+  return sorted[idx]
+}
+
 function requireUser(req, res, next) {
   const sessionId = getSessionIdFromRequest(req)
   if (!sessionId) return res.status(401).json({ error: 'not_authenticated' })
@@ -651,7 +685,7 @@ app.get('/api/leaderboard', (req, res) => {
       join users u on u.id = p.user_id
       where p.challenge_id = ?
       group by p.user_id
-      order by plays desc
+      order by plays desc, u.lastfm_username asc
       limit ?
     `,
     )
@@ -678,12 +712,12 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   const rows = db
     .prepare(
       `
-      select u.lastfm_username, u.display_name, u.email, count(*) as plays
+      select u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in, count(*) as plays
       from plays p
       join users u on u.id = p.user_id
       where p.challenge_id = ?
       group by p.user_id
-      order by plays desc
+      order by plays desc, u.lastfm_username asc
       limit ?
     `,
     )
@@ -696,12 +730,129 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   })
 })
 
+const SHIRT_SIZES = new Set(['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'])
+
+app.get('/api/me/prize-contact', requireUser, (req, res) => {
+  const row = db
+    .prepare(
+      `
+      select email, mailing_address, shirt_size
+      from users
+      where id = ?
+    `,
+    )
+    .get(req.user.id)
+  res.json({
+    ok: true,
+    email: row?.email ?? null,
+    mailing_address: row?.mailing_address ?? null,
+    shirt_size: row?.shirt_size ?? null,
+  })
+})
+
+app.get('/api/me/contact-preferences', requireUser, (req, res) => {
+  const row = db
+    .prepare(
+      `
+      select email, marketing_opt_in
+      from users
+      where id = ?
+    `,
+    )
+    .get(req.user.id)
+  res.json({
+    ok: true,
+    email: row?.email ?? null,
+    marketing_opt_in: Boolean(row?.marketing_opt_in),
+  })
+})
+
+app.put('/api/me/contact-preferences', requireUser, (req, res) => {
+  const marketing_opt_in = req.body?.marketing_opt_in
+  if (typeof marketing_opt_in !== 'boolean') {
+    return res.status(400).json({ error: 'invalid_body' })
+  }
+  if (marketing_opt_in) {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : ''
+    if (!email || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'invalid_email' })
+    }
+    db.prepare(
+      `
+      update users
+      set email = ?, marketing_opt_in = 1
+      where id = ?
+    `,
+    ).run(email, req.user.id)
+  } else {
+    db.prepare(
+      `
+      update users
+      set marketing_opt_in = 0
+      where id = ?
+    `,
+    ).run(req.user.id)
+  }
+  const row = db
+    .prepare(
+      `
+      select email, marketing_opt_in
+      from users
+      where id = ?
+    `,
+    )
+    .get(req.user.id)
+  res.json({
+    ok: true,
+    email: row?.email ?? null,
+    marketing_opt_in: Boolean(row?.marketing_opt_in),
+  })
+})
+
+app.put('/api/me/prize-contact', requireUser, (req, res) => {
+  const c = getChallengeForDisplay(db)
+  if (!c || c.status !== 'ended') {
+    return res.status(403).json({ error: 'prize_claim_not_open' })
+  }
+  const challengeId = c.row.id
+  const winnerId = getPrizeTieBreakUserId(db, challengeId)
+  if (winnerId == null || winnerId !== req.user.id) {
+    return res.status(403).json({ error: 'not_challenge_winner' })
+  }
+
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : ''
+  const mailingAddress =
+    typeof req.body?.mailing_address === 'string' ? req.body.mailing_address.trim() : ''
+  const shirtSize =
+    typeof req.body?.shirt_size === 'string' ? req.body.shirt_size.trim().toUpperCase() : ''
+
+  if (!email || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'invalid_email' })
+  }
+  if (!mailingAddress || mailingAddress.length < 5 || mailingAddress.length > 2000) {
+    return res.status(400).json({ error: 'invalid_mailing_address' })
+  }
+  if (!SHIRT_SIZES.has(shirtSize)) {
+    return res.status(400).json({ error: 'invalid_shirt_size' })
+  }
+
+  db.prepare(
+    `
+    update users
+    set email = ?, mailing_address = ?, shirt_size = ?
+    where id = ?
+  `,
+  ).run(email, mailingAddress, shirtSize, req.user.id)
+
+  res.json({ ok: true })
+})
+
 app.get('/api/me/stats', requireUser, (req, res) => {
   const c = getChallengeForDisplay(db)
   if (!c) {
     return res.json({
       ok: true,
-      mine: { plays: 0, rank: null },
+      mine: { plays: 0, rank: null, is_prize_winner: false },
       campaign: { participants: 0, total_plays: 0 },
     })
   }
@@ -718,7 +869,7 @@ app.get('/api/me/stats', requireUser, (req, res) => {
     )
     .get(req.user.id, challengeId)
 
-  const rank = db
+  const rankRow = db
     .prepare(
       `
       with lb as (
@@ -755,11 +906,17 @@ app.get('/api/me/stats', requireUser, (req, res) => {
     .get(challengeId)
 
   const myCount = Number(myPlays?.plays ?? 0)
-  const myRank = myCount > 0 ? Number(rank?.rank ?? null) : null
+  const myRank = myCount > 0 ? Number(rankRow?.rank ?? null) : null
+
+  let isPrizeWinner = false
+  if (c.status === 'ended' && myCount > 0) {
+    const prizeUserId = getPrizeTieBreakUserId(db, challengeId)
+    isPrizeWinner = prizeUserId != null && prizeUserId === req.user.id
+  }
 
   res.json({
     ok: true,
-    mine: { plays: myCount, rank: myRank },
+    mine: { plays: myCount, rank: myRank, is_prize_winner: isPrizeWinner },
     campaign: {
       participants: Number(participants?.total ?? 0),
       total_plays: Number(totalPlays?.total ?? 0),
@@ -783,6 +940,83 @@ async function ingestOnce() {
 
 cron.schedule(INGEST_CRON, () => {
   ingestOnce().catch(() => {})
+})
+
+/**
+ * Insert a **new** challenge row (new id). Past `plays` stay on old `challenge_id`s so you can sum
+ * streams per user across challenges later. Body: { title, trackArtist, trackName, startsAt, endsAt } (ISO 8601).
+ */
+app.post('/api/admin/challenge', requireUser, (req, res) => {
+  if (!req.user.is_artist) return res.status(403).json({ error: 'forbidden' })
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : ''
+  const trackArtist = typeof req.body?.trackArtist === 'string' ? req.body.trackArtist.trim() : ''
+  const trackName = typeof req.body?.trackName === 'string' ? req.body.trackName.trim() : ''
+  const startsAt = typeof req.body?.startsAt === 'string' ? req.body.startsAt.trim() : ''
+  const endsAt = typeof req.body?.endsAt === 'string' ? req.body.endsAt.trim() : ''
+  if (!title || !trackArtist || !trackName || !startsAt || !endsAt) {
+    return res.status(400).json({ error: 'missing_fields' })
+  }
+  const startsAtMs = Date.parse(startsAt)
+  const endsAtMs = Date.parse(endsAt)
+  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs) || endsAtMs <= startsAtMs) {
+    return res.status(400).json({ error: 'invalid_window' })
+  }
+  const id = insertChallenge(db, {
+    title,
+    trackArtist,
+    trackName,
+    startsAtMs,
+    endsAtMs,
+  })
+  const row = db.prepare('select * from challenges where id = ?').get(id)
+  const now = Date.now()
+  let status = 'live'
+  if (now < row.starts_at_ms) status = 'upcoming'
+  else if (now >= row.ends_at_ms) status = 'ended'
+  res.json({
+    ok: true,
+    challenge_id: id,
+    campaign: rowToCampaignPayload(row, status),
+  })
+})
+
+/** Cross-challenge stream counts for analytics (plays are stored per challenge_id forever). */
+app.get('/api/admin/stream-totals', requireUser, (req, res) => {
+  if (!req.user.is_artist) return res.status(403).json({ error: 'forbidden' })
+  const byUser = db
+    .prepare(
+      `
+      select u.id as user_id, u.lastfm_username, u.display_name, count(*) as total_plays
+      from plays p
+      join users u on u.id = p.user_id
+      group by p.user_id
+      order by total_plays desc
+    `,
+    )
+    .all()
+  const byChallenge = db
+    .prepare(
+      `
+      select p.challenge_id, c.title, c.starts_at_ms, c.ends_at_ms, count(*) as plays
+      from plays p
+      join challenges c on c.id = p.challenge_id
+      group by p.challenge_id
+      order by p.challenge_id desc
+    `,
+    )
+    .all()
+  const byChallengeUser = db
+    .prepare(
+      `
+      select p.challenge_id, u.lastfm_username, u.display_name, count(*) as plays
+      from plays p
+      join users u on u.id = p.user_id
+      group by p.challenge_id, p.user_id
+      order by p.challenge_id desc, plays desc
+    `,
+    )
+    .all()
+  res.json({ ok: true, by_user: byUser, by_challenge: byChallenge, by_challenge_user: byChallengeUser })
 })
 
 app.post('/api/admin/ingest-now', requireUser, async (req, res) => {

@@ -52,6 +52,29 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
 }
 
 /**
+ * Insert a new challenge row (new `id`). Ingest and leaderboards key plays by `challenge_id`, so old
+ * campaigns stay queryable alongside new ones. Prefer this over relying only on env sync, which
+ * updates the latest row in place and can mix metadata under one id.
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ title: string, trackArtist: string, trackName: string, startsAtMs: number, endsAtMs: number }} p
+ * @returns {number} new challenge id
+ */
+function insertChallenge(db, p) {
+  const { title, trackArtist, trackName, startsAtMs, endsAtMs } = p
+  const trackId = canonicalTrackKey(trackArtist, trackName)
+  const now = Date.now()
+  const r = db
+    .prepare(
+      `
+      insert into challenges (title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms, created_at_ms)
+      values (?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .run(title, trackId, trackName, trackArtist, startsAtMs, endsAtMs, now)
+  return Number(r.lastInsertRowid)
+}
+
+/**
  * Keeps the latest challenge row aligned with `CAMPAIGN_*` env (or code defaults).
  * @param {import('better-sqlite3').Database} db
  */
@@ -134,6 +157,7 @@ function rowToCampaignPayload(row, status) {
 
 module.exports = {
   bootstrapChallengeFromEnvIfEmpty,
+  insertChallenge,
   syncLatestChallengeWindowFromEnvOrDefaults,
   getActiveChallengeForIngest,
   getChallengeForDisplay,

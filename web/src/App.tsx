@@ -89,13 +89,31 @@ function App() {
       lastfm_username: string
       display_name: string | null
       email: string | null
+      mailing_address: string | null
+      shirt_size: string | null
+      marketing_opt_in?: number | boolean
       plays: number
     }>
   >([])
+  const [prizeContact, setPrizeContact] = useState<{
+    email: string | null
+    mailing_address: string | null
+    shirt_size: string | null
+  } | null>(null)
+  const [prizeContactLoading, setPrizeContactLoading] = useState(false)
+  const [prizeForm, setPrizeForm] = useState({
+    email: '',
+    mailing_address: '',
+    shirt_size: '' as string,
+  })
   const [myStats, setMyStats] = useState<{
-    mine: { plays: number; rank: number | null }
+    mine: { plays: number; rank: number | null; is_prize_winner: boolean }
     campaign: { participants: number; total_plays: number }
   } | null>(null)
+  const [marketingForm, setMarketingForm] = useState({
+    email: '',
+    marketing_opt_in: false,
+  })
   const [lastfmFinishing, setLastfmFinishing] = useState(false)
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
@@ -136,8 +154,35 @@ function App() {
 
       const mRes = await apiFetch('/api/me/stats')
       if (mRes.ok) {
-        const mJson = await mRes.json()
-        setMyStats({ mine: mJson.mine, campaign: mJson.campaign })
+        const mJson = await mRes.json() as {
+          mine: {
+            plays: number
+            rank: number | null
+            is_prize_winner?: boolean
+          }
+          campaign: { participants: number; total_plays: number }
+        }
+        setMyStats({
+          mine: {
+            ...mJson.mine,
+            is_prize_winner: Boolean(mJson.mine?.is_prize_winner),
+          },
+          campaign: mJson.campaign,
+        })
+      }
+
+      const cpRes = await apiFetch('/api/me/contact-preferences')
+      if (cpRes.ok) {
+        const cp = (await cpRes.json()) as {
+          email?: string | null
+          marketing_opt_in?: boolean
+        }
+        setMarketingForm({
+          email: cp.email?.trim() ?? '',
+          marketing_opt_in: Boolean(cp.marketing_opt_in),
+        })
+      } else {
+        setMarketingForm({ email: '', marketing_opt_in: false })
       }
     } else {
       // Stale cookie / sessionStorage id (new deploy, DB reset, multiple replicas, rotated SESSION_SECRET).
@@ -154,6 +199,7 @@ function App() {
       }
       setSession(null)
       setMyStats(null)
+      setMarketingForm({ email: '', marketing_opt_in: false })
       setLeaderboardContacts([])
     }
 
@@ -175,6 +221,9 @@ function App() {
             lastfm_username: string
             display_name: string | null
             email: string | null
+            mailing_address: string | null
+            shirt_size: string | null
+            marketing_opt_in?: number | boolean
             plays: number
           }>
         }
@@ -323,6 +372,67 @@ function App() {
     return () => window.clearTimeout(t)
   }, [notice])
 
+  /** Dev only: open `/?preview_winner=1` to preview the “you won” block without an ended challenge or rank #1. */
+  const previewWinner =
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('preview_winner') === '1'
+
+  const isChallengeWinner =
+    previewWinner ||
+    (Boolean(session) &&
+      campaign?.status === 'ended' &&
+      myStats != null &&
+      myStats.mine.is_prize_winner)
+
+  useEffect(() => {
+    if (!isChallengeWinner) {
+      setPrizeContact(null)
+      setPrizeForm({ email: '', mailing_address: '', shirt_size: '' })
+      return
+    }
+    if (previewWinner && !session) {
+      setPrizeContact(null)
+      setPrizeForm({ email: '', mailing_address: '', shirt_size: '' })
+      setPrizeContactLoading(false)
+      return
+    }
+    let cancelled = false
+    setPrizeContactLoading(true)
+    apiFetch('/api/me/prize-contact')
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Could not load prize form.')
+        return res.json() as Promise<{
+          ok?: boolean
+          email: string | null
+          mailing_address: string | null
+          shirt_size: string | null
+        }>
+      })
+      .then((j) => {
+        if (cancelled) return
+        setPrizeContact({
+          email: j.email,
+          mailing_address: j.mailing_address,
+          shirt_size: j.shirt_size,
+        })
+        setPrizeForm({
+          email: j.email ?? '',
+          mailing_address: j.mailing_address ?? '',
+          shirt_size: j.shirt_size ?? '',
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setPrizeContact(null)
+      })
+      .finally(() => {
+        if (!cancelled) setPrizeContactLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isChallengeWinner, campaign?.id, previewWinner, session])
+
   // Use a cache-busted URL so Chrome doesn't reuse a previously-cached redirect chain.
   const lastfmLoginHint = useMemo(
     () => lastfmLoginUrl({ cacheBust: true }),
@@ -338,8 +448,7 @@ function App() {
     return d <= 1 ? 'final day' : `${d} days left`
   }, [campaign])
 
-  const showComingSoonBanner =
-    ready && (campaign?.status === 'ended' || campaign === null)
+  const showComingSoonBanner = ready && campaign === null
 
   const playsSection = (
     <section className="band" aria-labelledby="stats-heading">
@@ -348,19 +457,29 @@ function App() {
       </p>
       <h2 id="stats-heading">your plays</h2>
       {session ? (
-        <div className="stat-row">
-          <div className="stat stat--value-only">
-            <span className="stat__value" aria-label="plays this challenge window">
-              {myStats?.mine.plays ?? 0}
-            </span>
+        <>
+          <div className="stat-row">
+            <div className="stat stat--value-only">
+              <span className="stat__value" aria-label="plays this challenge window">
+                {myStats?.mine.plays ?? 0}
+              </span>
+            </div>
+            <div className="stat">
+              <span className="stat__label">rank</span>
+              <span className="stat__value">
+                {myStats?.mine.rank != null ? `#${myStats.mine.rank}` : '—'}
+              </span>
+            </div>
           </div>
-          <div className="stat">
-            <span className="stat__label">rank</span>
-            <span className="stat__value">
-              {myStats?.mine.rank != null ? `#${myStats.mine.rank}` : '—'}
-            </span>
-          </div>
-        </div>
+          {campaign?.status === 'ended' &&
+          myStats?.mine.rank === 1 &&
+          myStats.mine.is_prize_winner === false ? (
+            <p className="body-quiet body-quiet--tight plays-tie-note">
+              you tied for #1 on plays — the shirt prize was randomly picked among everyone tied at the
+              top.
+            </p>
+          ) : null}
+        </>
       ) : (
         <p className="body-quiet">
           sign in above to see your plays and rank here.
@@ -414,6 +533,147 @@ function App() {
     </section>
   )
 
+  const prizeClaimComplete =
+    Boolean(
+      prizeContact?.email?.trim() &&
+        prizeContact?.mailing_address?.trim() &&
+        prizeContact?.shirt_size?.trim(),
+    )
+
+  const winnerPrizeSection = isChallengeWinner ? (
+      <section className="band band--winner" aria-labelledby="winner-heading">
+        <div className="winner-prize__card">
+        {previewWinner ? (
+          <p className="winner-prize__preview-hint" role="note">
+            dev preview — remove <code>?preview_winner=1</code> from the URL when you&apos;re done.
+          </p>
+        ) : null}
+        <p className="eyebrow">you</p>
+        <h2 id="winner-heading" className="winner-prize__title">
+          you won!
+        </h2>
+        <p className="body-quiet body-quiet--tight winner-prize__lede">
+          you topped the leaderboard for this release challenge — drop your details so we can send your shirt.
+        </p>
+        {previewWinner && !session ? (
+          <p className="body-quiet body-quiet--tight">
+            sign in to load saved details and submit (preview still shows the form below).
+          </p>
+        ) : null}
+        {prizeContactLoading ? (
+          <p className="body-quiet">loading…</p>
+        ) : prizeClaimComplete ? (
+          <p className="winner-prize__thanks" role="status">
+            thanks — we have your shipping details on file. we&apos;ll be in touch.
+          </p>
+        ) : (
+          <form
+            className="winner-prize__form"
+            noValidate={previewWinner && !session}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (previewWinner && !session) return
+              run(async () => {
+                const res = await apiFetch('/api/me/prize-contact', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: prizeForm.email.trim(),
+                    mailing_address: prizeForm.mailing_address.trim(),
+                    shirt_size: prizeForm.shirt_size,
+                  }),
+                })
+                if (!res.ok) {
+                  const errBody = await res.json().catch(() => ({}))
+                  const code =
+                    errBody && typeof errBody === 'object' && 'error' in errBody
+                      ? String((errBody as { error?: string }).error)
+                      : ''
+                  if (code === 'invalid_email') {
+                    throw new Error('Please enter a valid email address.')
+                  }
+                  if (code === 'invalid_mailing_address') {
+                    throw new Error('Please enter your full mailing address (at least a few lines).')
+                  }
+                  if (code === 'invalid_shirt_size') {
+                    throw new Error('Please choose a shirt size.')
+                  }
+                  throw new Error('Could not save your details. Try again.')
+                }
+                setPrizeContact({
+                  email: prizeForm.email.trim(),
+                  mailing_address: prizeForm.mailing_address.trim(),
+                  shirt_size: prizeForm.shirt_size,
+                })
+                setMarketingForm((m) => ({
+                  ...m,
+                  email: prizeForm.email.trim(),
+                }))
+                setNotice('saved — thank you!')
+              })
+            }}
+          >
+            <label className="winner-prize__field">
+              <span className="winner-prize__label">email</span>
+              <input
+                type="email"
+                name="email"
+                autoComplete="email"
+                className="winner-prize__input"
+                value={prizeForm.email}
+                onChange={(ev) =>
+                  setPrizeForm((f) => ({ ...f, email: ev.target.value }))
+                }
+                required
+              />
+            </label>
+            <label className="winner-prize__field">
+              <span className="winner-prize__label">mailing address</span>
+              <textarea
+                name="mailing_address"
+                className="winner-prize__textarea"
+                rows={4}
+                value={prizeForm.mailing_address}
+                onChange={(ev) =>
+                  setPrizeForm((f) => ({ ...f, mailing_address: ev.target.value }))
+                }
+                placeholder="full name, street, city, state / province, postal code, country"
+                required
+              />
+            </label>
+            <label className="winner-prize__field">
+              <span className="winner-prize__label">unisex shirt size</span>
+              <select
+                className="winner-prize__input"
+                value={prizeForm.shirt_size}
+                onChange={(ev) =>
+                  setPrizeForm((f) => ({ ...f, shirt_size: ev.target.value }))
+                }
+                required
+              >
+                <option value="">choose…</option>
+                <option value="S">S</option>
+                <option value="M">M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+                <option value="2XL">2XL</option>
+                <option value="3XL">3XL</option>
+                <option value="4XL">4XL</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={busy || !session}
+            >
+              save details
+            </button>
+          </form>
+        )}
+        </div>
+      </section>
+    ) : null
+
   const merchSection = (
     <section className="band band--merch" aria-labelledby="merch-heading">
       <div className="merch-prize-row">
@@ -421,9 +681,13 @@ function App() {
           <p className="eyebrow" id="merch-label">
             03 — merch
           </p>
-          <h2 id="merch-heading">this week's prize</h2>
+          <h2 id="merch-heading">
+            {campaign?.status === 'ended' ? "this challenge's prize" : "this week's prize"}
+          </h2>
           <p className="body-quiet body-quiet--tight">
-            #1 on the leaderboard when the window closes wins this limited edition 'let the record show, i fell apart' tee!
+            {campaign?.status === 'ended'
+              ? '#1 on the leaderboard for this window won the limited edition tee. The next challenge (and more merch) coming soon!'
+              : "#1 on the leaderboard when the challenge window closes wins this limited edition 'let the record show, i fell apart' tee!"}
           </p>
         </div>
         <div className="merch-prize-row__visual">
@@ -440,6 +704,97 @@ function App() {
       </div>
     </section>
   )
+
+  const updatesSection = session ? (
+    <section className="band band--updates" aria-labelledby="updates-heading">
+      <div className="updates-opt">
+        <p className="eyebrow" id="updates-label">
+          04 — updates
+        </p>
+        <div className="updates-opt__title-row">
+          <h3 id="updates-heading" className="updates-opt__title">
+            new challenges
+          </h3>
+          <span className="updates-opt__rail" aria-hidden="true">
+            optional
+          </span>
+        </div>
+        <p className="body-quiet body-quiet--tight updates-opt__lede">
+          if you want a heads-up when the next challenge goes live, leave your email and opt in
+          below.
+        </p>
+        <form
+          className="updates-opt__form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            run(async () => {
+              const res = await apiFetch('/api/me/contact-preferences', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: marketingForm.email.trim(),
+                  marketing_opt_in: marketingForm.marketing_opt_in,
+                }),
+              })
+              if (!res.ok) {
+                const errBody = await res.json().catch(() => ({}))
+                const code =
+                  errBody && typeof errBody === 'object' && 'error' in errBody
+                    ? String((errBody as { error?: string }).error)
+                    : ''
+                if (code === 'invalid_email') {
+                  throw new Error('Enter a valid email, or turn off the checkbox.')
+                }
+                throw new Error('Could not save your preferences. Try again.')
+              }
+              const j = (await res.json()) as {
+                email?: string | null
+                marketing_opt_in?: boolean
+              }
+              setMarketingForm({
+                email: j.email?.trim() ?? '',
+                marketing_opt_in: Boolean(j.marketing_opt_in),
+              })
+              setPrizeForm((f) => ({
+                ...f,
+                email: j.email?.trim() ?? f.email,
+              }))
+              setNotice('preferences saved')
+            })
+          }}
+        >
+          <label className="updates-opt__field">
+            <span className="updates-opt__label">email</span>
+            <input
+              type="email"
+              name="updates_email"
+              autoComplete="email"
+              className="updates-opt__input"
+              value={marketingForm.email}
+              onChange={(ev) => setMarketingForm((f) => ({ ...f, email: ev.target.value }))}
+              placeholder="you@example.com"
+            />
+          </label>
+          <label className="updates-opt__check">
+            <input
+              type="checkbox"
+              checked={marketingForm.marketing_opt_in}
+              onChange={(ev) =>
+                setMarketingForm((f) => ({
+                  ...f,
+                  marketing_opt_in: ev.target.checked,
+                }))
+              }
+            />
+            <span>email me when there&apos;s a new challenge</span>
+          </label>
+          <button type="submit" className="btn btn--outline" disabled={busy}>
+            save preferences
+          </button>
+        </form>
+      </div>
+    </section>
+  ) : null
 
   return (
     <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
@@ -464,6 +819,7 @@ function App() {
                 setLeaderboard([])
                 setLeaderboardContacts([])
                 setMyStats(null)
+                setMarketingForm({ email: '', marketing_opt_in: false })
               })
             }
           >
@@ -557,9 +913,11 @@ function App() {
       <main className="main">
         {session ? (
           <>
+            {winnerPrizeSection}
             {playsSection}
             {leaderboardSection}
             {merchSection}
+            {updatesSection}
           </>
         ) : (
           <>
@@ -615,26 +973,41 @@ function App() {
             <div className="artist-contacts">
               <h3 className="artist-contacts__title">listeners (top 10)</h3>
               <p className="body-quiet body-quiet--tight">
-                Last.fm usernames for prize follow-up. Email is not collected via Last.fm sign-in.
+                Prize email and shipping come from the winner form after the window closes. The &ldquo;news
+                opt-in&rdquo; column is from the optional form below the merch block (not Last.fm).
               </p>
               {leaderboardContacts.length === 0 ? (
                 <p className="body-quiet">no listeners with plays in this challenge yet.</p>
               ) : (
-                <div className="artist-contacts__table" role="table" aria-label="Listener contact emails">
+                <div className="artist-contacts__table" role="table" aria-label="Listener contacts">
                   <div className="artist-contacts__row artist-contacts__row--head" role="row">
                     <span role="columnheader">#</span>
                     <span role="columnheader">name</span>
                     <span role="columnheader">last.fm</span>
                     <span role="columnheader">plays</span>
+                    <span role="columnheader">email</span>
+                    <span role="columnheader">shirt</span>
+                    <span role="columnheader">ship to</span>
+                    <span role="columnheader">news</span>
                   </div>
                   {leaderboardContacts.map((row, i) => (
                     <div className="artist-contacts__row" key={row.lastfm_username} role="row">
                       <span role="cell">{i + 1}</span>
                       <span role="cell">{row.display_name ?? '—'}</span>
-                      <span role="cell" className="artist-contacts__email">
+                      <span role="cell" className="artist-contacts__mono">
                         {row.lastfm_username}
                       </span>
                       <span role="cell">{row.plays}</span>
+                      <span role="cell" className="artist-contacts__mono">
+                        {row.email ?? '—'}
+                      </span>
+                      <span role="cell">{row.shirt_size ?? '—'}</span>
+                      <span role="cell" className="artist-contacts__ship" title={row.mailing_address ?? ''}>
+                        {row.mailing_address?.trim() ? row.mailing_address : '—'}
+                      </span>
+                      <span role="cell">
+                        {row.marketing_opt_in === 1 || row.marketing_opt_in === true ? 'yes' : '—'}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -657,8 +1030,8 @@ function App() {
 
       <footer className="footer">
         <p className="footer__line">
-          counts use last.fm scrobbles — connect spotify (or your player) to last.fm so listens show up. prize
-          contact may use your last.fm username or a separate process you run as the artist.
+          connect spotify to last.fm so streams show up. if you win,
+          we&apos;ll ask for email and a shipping address on this site at the end of the challenge window for the tee.
         </p>
       </footer>
 

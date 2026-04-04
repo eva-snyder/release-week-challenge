@@ -212,12 +212,33 @@ function migrateUsersEmailIfNeeded(db) {
   db.exec('alter table users add column email text')
 }
 
+/** Prize shipping / shirt size (winner claim form). */
+function migrateUsersPrizeContactIfNeeded(db) {
+  const cols = db.prepare('pragma table_info(users)').all()
+  const names = cols.map((c) => c.name)
+  if (!names.includes('mailing_address')) {
+    db.exec('alter table users add column mailing_address text')
+  }
+  if (!names.includes('shirt_size')) {
+    db.exec('alter table users add column shirt_size text')
+  }
+}
+
+/** Optional marketing: email me about new challenges (0/1). */
+function migrateUsersMarketingOptInIfNeeded(db) {
+  const cols = db.prepare('pragma table_info(users)').all()
+  if (cols.some((c) => c.name === 'marketing_opt_in')) return
+  db.exec('alter table users add column marketing_opt_in integer not null default 0')
+}
+
 function openDb(dbPath) {
   const db = new Database(dbPath)
   initDb(db)
   migrateSpotifyToLastfmIfNeeded(db)
   migrateChallengesTrackArtistIfNeeded(db)
   migrateUsersEmailIfNeeded(db)
+  migrateUsersPrizeContactIfNeeded(db)
+  migrateUsersMarketingOptInIfNeeded(db)
   return db
 }
 
