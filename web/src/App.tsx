@@ -343,7 +343,7 @@ function App() {
 
   return (
     <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
-      <div className="auth-bar" aria-label="Account">
+      <div className={`auth-bar${!session ? ' auth-bar--signed-out-mobile' : ''}`} aria-label="Account">
         {session ? (
           <>
             <span className="auth-greet" title={session.user.lastfm_username}>
@@ -398,9 +398,6 @@ function App() {
                 new to last.fm?
               </button>
             </div>
-            <p className="auth-hint body-quiet">
-              <a href="/auth/finish">other device?</a> paste your link to finish.
-            </p>
           </div>
         )}
       </div>
