@@ -8,7 +8,11 @@ import {
   setStoredSessionId,
   lastfmLoginUrl,
 } from './authUrl'
-import { msUntilNextPostIngestRefresh } from './ingestRefreshSchedule'
+import {
+  msUntilNextUtcQuarterHourBoundary,
+  POST_INGEST_BURST_INTERVAL_SEC,
+  POST_INGEST_BURST_TOTAL_SEC,
+} from './ingestRefreshSchedule'
 
 type Session = {
   ok: true
@@ -376,24 +380,41 @@ function App() {
     return () => window.clearTimeout(t)
   }, [notice])
 
-  /** After each UTC quarter-hour + 45s (default ingest cadence on Railway), refresh stats so new plays show without a manual tap. */
+  /**
+   * After each UTC quarter-hour, refresh several times (every 15s for 2 minutes) so slow ingest
+   * still updates the leaderboard without a manual tap.
+   */
   useEffect(() => {
     if (!session || campaign?.status !== 'live') return
     let cancelled = false
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeouts: ReturnType<typeof setTimeout>[] = []
 
-    function schedule() {
-      const ms = msUntilNextPostIngestRefresh()
-      timeoutId = window.setTimeout(() => {
+    function arm() {
+      const waitMs = msUntilNextUtcQuarterHourBoundary()
+      const boundaryWait = window.setTimeout(() => {
         if (cancelled) return
-        void refreshDashboard()
-        schedule()
-      }, ms)
+        for (let sec = 0; sec <= POST_INGEST_BURST_TOTAL_SEC; sec += POST_INGEST_BURST_INTERVAL_SEC) {
+          timeouts.push(
+            window.setTimeout(() => {
+              if (cancelled) return
+              void refreshDashboard()
+            }, sec * 1000),
+          )
+        }
+        timeouts.push(
+          window.setTimeout(() => {
+            if (cancelled) return
+            arm()
+          }, POST_INGEST_BURST_TOTAL_SEC * 1000 + 100),
+        )
+      }, waitMs)
+      timeouts.push(boundaryWait)
     }
-    schedule()
+
+    arm()
     return () => {
       cancelled = true
-      if (timeoutId != null) window.clearTimeout(timeoutId)
+      for (const id of timeouts) window.clearTimeout(id)
     }
   }, [session, campaign?.status, campaign?.id, refreshDashboard])
 
@@ -521,7 +542,9 @@ function App() {
             {session ? '02 — everyone' : '01 — everyone'}
           </p>
           <h2 id="lb-heading">leaderboard</h2>
-          <p className="body-quiet body-quiet--tight">top ten for this challenge window. refreshed every 15 minutes.</p>
+          <p className="body-quiet body-quiet--tight">
+            top ten for this challenge window. auto-refreshes every 15s for 2 minutes after each quarter-hour (UTC).
+          </p>
         </div>
         <button
           type="button"
