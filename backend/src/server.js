@@ -321,8 +321,14 @@ app.get('/health', (_req, res) =>
       hasApiKey: Boolean(String(process.env.LASTFM_API_KEY ?? '').trim()),
       hasApiSecret: Boolean(String(process.env.LASTFM_API_SECRET ?? '').trim()),
     },
+    sessionSecretEnvPresent: Boolean(String(process.env.SESSION_SECRET ?? '').trim()),
     sqliteOAuthNote:
       'OAuth state is stored in SQLite on this process. Multiple replicas without sticky sessions break Last.fm login.',
+    railwayChecklist: [
+      'Set service replicas to 1 (Settings → Deploy → Replicas) unless you use a shared database.',
+      'Last.fm app callback URL must be exactly: ' + FRONTEND_ORIGIN + '/auth/callback',
+      'After login, compare [auth/login] and [auth/callback] instance= lines in deploy logs — they must match.',
+    ],
     dbPath: DB_PATH,
     cwd: process.cwd(),
     hasWebDist: HAS_WEB_DIST,
