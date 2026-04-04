@@ -362,14 +362,7 @@ function App() {
         </div>
       ) : (
         <p className="body-quiet">
-          sign in to see your plays and rank.{' '}
-          <button
-            type="button"
-            className="btn btn--text btn--inline"
-            onClick={() => setLastfmSetupOpen(true)}
-          >
-            new to last.fm?
-          </button>
+          sign in above to see your plays and rank here.
         </p>
       )}
     </section>
@@ -422,64 +415,34 @@ function App() {
 
   return (
     <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
-      <div className={`auth-bar${!session ? ' auth-bar--signed-out-mobile' : ''}`} aria-label="Account">
-        {session ? (
-          <>
-            <span className="auth-greet" title={session.user.lastfm_username}>
-              hi, {session.user.display_name?.trim() || session.user.lastfm_username}
-            </span>
-            <span className="auth-pill auth-pill--ok">signed in</span>
-            {session.user.is_artist ? (
-              <span className="auth-pill">artist</span>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() =>
-                run(async () => {
-                  const lr = await apiFetch('/auth/logout', { method: 'POST' })
-                  if (!lr.ok) throw new Error('Could not log out. Try again.')
-                  clearStoredSessionId()
-                  setSession(null)
-                  setLeaderboard([])
-                  setLeaderboardContacts([])
-                  setMyStats(null)
-                })
-              }
-            >
-              log out
-            </button>
-          </>
-        ) : (
-          <div className="auth-signin">
-            <div className="auth-signin__actions">
-              <a
-                className="btn btn--primary"
-                href={lastfmLoginHint}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  try {
-                    localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
-                  } catch {
-                    /* ignore */
-                  }
-                  setLastfmPollKick((k) => k + 1)
-                }}
-              >
-                sign in with last.fm
-              </a>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => setLastfmSetupOpen(true)}
-              >
-                new to last.fm?
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {session ? (
+        <div className="auth-bar" aria-label="Account">
+          <span className="auth-greet" title={session.user.lastfm_username}>
+            hi, {session.user.display_name?.trim() || session.user.lastfm_username}
+          </span>
+          <span className="auth-pill auth-pill--ok">signed in</span>
+          {session.user.is_artist ? (
+            <span className="auth-pill">artist</span>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() =>
+              run(async () => {
+                const lr = await apiFetch('/auth/logout', { method: 'POST' })
+                if (!lr.ok) throw new Error('Could not log out. Try again.')
+                clearStoredSessionId()
+                setSession(null)
+                setLeaderboard([])
+                setLeaderboardContacts([])
+                setMyStats(null)
+              })
+            }
+          >
+            log out
+          </button>
+        </div>
+      ) : null}
 
       <header className="hero">
         {session ? (
@@ -520,6 +483,42 @@ function App() {
         </p>
         <div className="hero__rule" aria-hidden />
       </header>
+
+      {!session ? (
+        <div className="auth-cta" aria-label="Join this challenge">
+          <p className="auth-cta__intro">
+            join with last.fm to count your listens for this release. sign in if you already use last.fm, or
+            tap set up to create an account and link Spotify.
+          </p>
+          <div className="auth-signin">
+            <div className="auth-signin__actions">
+              <a
+                className="btn btn--primary"
+                href={lastfmLoginHint}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  try {
+                    localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
+                  } catch {
+                    /* ignore */
+                  }
+                  setLastfmPollKick((k) => k + 1)
+                }}
+              >
+                sign in with last.fm
+              </a>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setLastfmSetupOpen(true)}
+              >
+                set up last.fm + Spotify
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showComingSoonBanner ? (
         <p className="challenge-banner" role="status">

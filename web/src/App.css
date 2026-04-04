@@ -12,22 +12,9 @@
   box-sizing: border-box;
 }
 
-/* Signed-out: extra top space only when auth bar stays fixed (wide screens) */
+/* Signed-out: no fixed auth strip — guest controls sit under the hero */
 .page--signed-out {
-  padding-top: clamp(92px, 24vw, 120px);
-}
-
-@media (min-width: 640px) {
-  .page--signed-out {
-    padding-top: 64px;
-  }
-}
-
-/* Narrow screens: signed-out auth is in document flow — no extra top padding */
-@media (max-width: 639px) {
-  .page--signed-out {
-    padding-top: 0;
-  }
+  padding-top: 0;
 }
 
 /* ——— auth (modern chip, vintage green) ——— */
@@ -53,24 +40,6 @@
     left: auto;
     align-items: center;
     padding: 14px 22px;
-  }
-}
-
-/* Signed-out on small screens: don’t fix to viewport — stack above hero, solid strip */
-@media (max-width: 639px) {
-  .auth-bar--signed-out-mobile {
-    position: static;
-    left: auto;
-    justify-content: stretch;
-    padding: 2px 0 8px;
-    margin: 0 0 2px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-  }
-
-  .auth-bar--signed-out-mobile .auth-signin {
-    max-width: none;
-    width: 100%;
   }
 }
 
@@ -157,6 +126,33 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Guest join block: directly under hero, above leaderboard */
+.auth-cta {
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 4px 0 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.auth-cta__intro {
+  margin: 0 auto 12px;
+  max-width: 38ch;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.auth-cta .auth-signin {
+  max-width: none;
+  width: 100%;
+}
+
+.auth-cta .auth-signin__actions {
+  max-width: min(380px, 100%);
+  margin: 0 auto;
 }
 
 /* ——— hero (editorial) ——— */

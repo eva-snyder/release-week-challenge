@@ -45,7 +45,7 @@
 
 @media (max-width: 639px) {
   #root {
-    padding: 10px 16px 40px;
+    padding: 0 16px 40px;
   }
 }
 
