@@ -1,6 +1,9 @@
-/** Default window when env not set: 2026-03-27 → 2026-04-04 UTC (7 days; `ends` is exclusive in ingest). */
+/**
+ * Default window when env not set (~5 days; `ends` is exclusive — live through 2026-03-31 UTC).
+ * Override with CAMPAIGN_STARTS_AT / CAMPAIGN_ENDS_AT (e.g. on Railway) anytime.
+ */
 const DEFAULT_CAMPAIGN_STARTS_AT = '2026-03-27T00:00:00Z'
-const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-04T00:00:00Z'
+const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-01T00:00:00Z'
 
 const { normalizeMeta } = require('./lastfm')
 
