@@ -740,7 +740,7 @@
 .artist-contacts__row {
   display: grid;
   grid-template-columns:
-    2rem minmax(4rem, 0.85fr) minmax(5rem, 1fr) auto minmax(6rem, 1fr) minmax(2.5rem, 0.55fr)
+    2rem minmax(4rem, 0.85fr) minmax(5rem, 1fr) auto auto minmax(6rem, 1fr) minmax(2.5rem, 0.55fr)
     minmax(7rem, 1.1fr) minmax(2.5rem, 0.5fr);
   gap: 10px;
   align-items: baseline;

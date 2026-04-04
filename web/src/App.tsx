@@ -128,6 +128,7 @@ function App() {
       shirt_size: string | null
       marketing_opt_in?: number | boolean
       plays: number
+      total_all_challenges: number
     }>
   >([])
   const [prizeContact, setPrizeContact] = useState<{
@@ -269,6 +270,7 @@ function App() {
             shirt_size: string | null
             marketing_opt_in?: number | boolean
             plays: number
+            total_all_challenges: number
           }>
         }
         setLeaderboardContacts(contJson.rows ?? [])
@@ -1216,7 +1218,8 @@ function App() {
               <h3 className="artist-contacts__title">listeners</h3>
               <p className="body-quiet body-quiet--tight">
                 Prize email and shipping come from the winner form after the window closes. The &ldquo;news
-                opt-in&rdquo; column is from the optional form below the merch block (not Last.fm).
+                opt-in&rdquo; column is from the optional form below the merch block (not Last.fm). Plays =
+                this challenge only; total = all challenges in this app.
               </p>
               {leaderboardContacts.length === 0 ? (
                 <p className="body-quiet">no listeners with plays in this challenge yet.</p>
@@ -1227,6 +1230,7 @@ function App() {
                     <span role="columnheader">name</span>
                     <span role="columnheader">last.fm</span>
                     <span role="columnheader">plays</span>
+                    <span role="columnheader">total</span>
                     <span role="columnheader">email</span>
                     <span role="columnheader">shirt</span>
                     <span role="columnheader">ship to</span>
@@ -1240,6 +1244,9 @@ function App() {
                         {row.lastfm_username}
                       </span>
                       <span role="cell">{row.plays}</span>
+                      <span role="cell" title="All challenges, all time">
+                        {row.total_all_challenges ?? row.plays}
+                      </span>
                       <span role="cell" className="artist-contacts__mono">
                         {row.email ?? '—'}
                       </span>

@@ -714,7 +714,8 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
     .prepare(
       `
       select u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in,
-             coalesce(pp.plays, 0) as plays
+             coalesce(pp.plays, 0) as plays,
+             (select count(*) from plays p3 where p3.user_id = u.id) as total_all_challenges
       from users u
       join tokens t on t.user_id = u.id
       left join (
