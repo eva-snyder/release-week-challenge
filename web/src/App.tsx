@@ -84,12 +84,16 @@ function formatCampaignDate(iso: string): string {
 function formatCampaignDateTimeUtc(iso: string): string {
   const d = new Date(iso)
   if (!Number.isFinite(d.getTime())) return ''
-  return d.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  // Avoid dateStyle/timeStyle + timeZoneName — Safari throws "Invalid option" for that combo.
+  const s = d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZone: CAMPAIGN_DISPLAY_TZ,
-    timeZoneName: 'short',
   })
+  return `${s} UTC`
 }
 
 /** Remaining time as whole days + hours (same instant for everyone; `now` is client clock). */
