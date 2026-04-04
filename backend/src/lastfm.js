@@ -74,9 +74,18 @@ async function authGetToken() {
   return String(token).trim()
 }
 
-function buildAuthorizeUrl(token) {
+/**
+ * Redirect browser to Last.fm to approve the app.
+ * @param {string} callbackAbsoluteUrl - Full URL Last.fm should send the user to after approval
+ *   (e.g. https://your-host/auth/callback). Passed as `cb` so Last.fm uses this exact URL; see
+ *   https://www.last.fm/api/authentication — avoids relying only on the dashboard callback matching.
+ */
+function buildAuthorizeUrl(token, callbackAbsoluteUrl) {
   const { apiKey } = getConfig()
   const q = new URLSearchParams({ api_key: apiKey, token: String(token) })
+  if (callbackAbsoluteUrl) {
+    q.set('cb', String(callbackAbsoluteUrl).trim())
+  }
   return `https://www.last.fm/api/auth/?${q.toString()}`
 }
 

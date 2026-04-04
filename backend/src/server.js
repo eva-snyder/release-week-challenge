@@ -224,9 +224,18 @@ if (IS_PRODUCTION || process.env.TRUST_PROXY === '1') {
   app.set('trust proxy', 1)
 }
 
+function originEquals(a, b) {
+  try {
+    return new URL(a).origin === new URL(b).origin
+  } catch {
+    return false
+  }
+}
+
 function isAllowedCorsOrigin(origin) {
   if (!origin || typeof origin !== 'string') return false
   if (origin === FRONTEND_ORIGIN) return true
+  if (originEquals(origin, FRONTEND_ORIGIN)) return true
   const n = normalizeReturnTo(origin)
   return Boolean(n && n === origin)
 }
@@ -362,14 +371,16 @@ app.get('/auth/login', async (req, res) => {
       (trustedOrigin && !isLocalDevOrigin(trustedOrigin) ? trustedOrigin : null) ??
       FRONTEND_ORIGIN
     rememberOAuthState(token, returnTo)
+    const lastfmCallbackAbs = `${FRONTEND_ORIGIN.replace(/\/$/, '')}/auth/callback`
     // eslint-disable-next-line no-console
     console.log(
-      '[auth/login] instance=%s returnTo=%s token_prefix=%s',
+      '[auth/login] instance=%s returnTo=%s lastfm_cb=%s token_prefix=%s',
       INSTANCE_ID,
       returnTo,
+      lastfmCallbackAbs,
       String(token).slice(0, 8),
     )
-    res.redirect(302, buildAuthorizeUrl(token))
+    res.redirect(302, buildAuthorizeUrl(token, lastfmCallbackAbs))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     // eslint-disable-next-line no-console
