@@ -8,6 +8,7 @@ import {
   setStoredSessionId,
   lastfmLoginUrl,
 } from './authUrl'
+import { msUntilNextPostIngestRefresh } from './ingestRefreshSchedule'
 
 type Session = {
   ok: true
@@ -374,6 +375,27 @@ function App() {
     const t = window.setTimeout(() => setNotice(null), 12000)
     return () => window.clearTimeout(t)
   }, [notice])
+
+  /** After each UTC quarter-hour + 45s (default ingest cadence on Railway), refresh stats so new plays show without a manual tap. */
+  useEffect(() => {
+    if (!session || campaign?.status !== 'live') return
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+    function schedule() {
+      const ms = msUntilNextPostIngestRefresh()
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return
+        void refreshDashboard()
+        schedule()
+      }, ms)
+    }
+    schedule()
+    return () => {
+      cancelled = true
+      if (timeoutId != null) window.clearTimeout(timeoutId)
+    }
+  }, [session, campaign?.status, campaign?.id, refreshDashboard])
 
   /** Dev only: open `/?preview_winner=1` to preview the “you won” block without an ended challenge or rank #1. */
   const previewWinner =
