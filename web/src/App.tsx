@@ -668,6 +668,10 @@ function App() {
           <p className="body-quiet body-quiet--tight">
             top ten for this challenge window. refreshes every 15 minutes.
           </p>
+          <p className="body-quiet body-quiet--tight">
+            if there&apos;s a tie for the most plays, the tee prize goes to one person chosen at random
+            from everyone tied at the top.
+          </p>
         </div>
         <button
           type="button"
@@ -857,8 +861,8 @@ function App() {
           </h2>
           <p className="body-quiet body-quiet--tight">
             {campaign?.status === 'ended'
-              ? '#1 on the leaderboard for this window won the limited edition tee. The next challenge (and more merch) coming soon!'
-              : "#1 on the leaderboard when the challenge window closes wins this limited edition 'let the record show, i fell apart' tee!"}
+              ? '#1 on the leaderboard for this window won the limited edition tee. if there was a tie for #1, the winner was picked at random among everyone tied. the next challenge (and more merch) coming soon!'
+              : "#1 on the leaderboard when the challenge window closes wins this limited edition 'let the record show, i fell apart' tee. if there's a tie for #1, the winner is picked at random among everyone tied."}
           </p>
         </div>
         <div className="merch-prize-row__visual">
