@@ -304,7 +304,9 @@
   .merch-prize-row__visual {
     width: 100%;
     max-width: 128px;
-    align-self: flex-end;
+    align-self: center;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
@@ -436,7 +438,7 @@
 .stat--value-only {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 /* ——— leaderboard table ——— */
