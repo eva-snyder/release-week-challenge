@@ -90,9 +90,8 @@ export function lastfmLoginUrl(opts?: { cacheBust?: boolean }): string {
 }
 
 /**
- * One Last.fm URL for “I need an account” and “connect Spotify for scrobbling”.
- * After login you land on /settings/applications (Connect Spotify). The login page’s
- * sign-up link keeps the same ?next= so new accounts go there too after joining.
+ * Last.fm sign-up flow, then redirect to /settings/applications (Connect Spotify for scrobbling).
+ * “Sign in with last.fm” on our site uses /auth/login instead — this URL is for new accounts only.
  */
 export const LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL =
-  'https://www.last.fm/login?next=/settings/applications'
+  'https://www.last.fm/join?next=%2Fsettings%2Fapplications'

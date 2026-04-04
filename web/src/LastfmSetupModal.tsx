@@ -44,7 +44,7 @@ export function LastfmSetupModal({ open, onClose }: Props) {
           Do this on Last.fm first, then come back here and tap sign in with last.fm in the corner.
         </p>
         <ol className="lf-modal__steps">
-          <li>Create a Last.fm account (sign up or log in on their site).</li>
+          <li>Create a Last.fm account — the link opens their sign-up page, then sends you to connect apps.</li>
           <li>Connect Spotify so your listens count as scrobbles (Last.fm will prompt you).</li>
           <li>Verify your email if Last.fm asks — check your inbox for their link.</li>
         </ol>
