@@ -277,6 +277,8 @@ function clearCookie(res, name, extra = {}) {
 }
 
 const OAUTH_RT_COOKIE = 'oauth_rt'
+/** Same Last.fm token from auth.getToken — server can auth.getSession after user approves without browser hitting /auth/callback. */
+const OAUTH_PT_COOKIE = 'oauth_pt'
 
 /**
  * When SQLite oauth_states misses (multiple Node processes / replicas), recover return URL from
@@ -299,6 +301,60 @@ function readReturnToFromOAuthCookie(req) {
   } catch {
     return null
   }
+}
+
+/**
+ * Exchange approved Last.fm token for DB session. Used by /auth/callback and GET /api/auth/try-complete-lastfm.
+ * @param {{ skipHandoff?: boolean }} [opts] — if true, do not allocate oauth_handoffs row (direct sid cookie path).
+ */
+async function createLastfmSessionFromApprovedToken(token, opts = {}) {
+  const { sessionKey, username } = await authGetSession(token)
+  const displayName = username
+  const now = Date.now()
+
+  const user = db
+    .prepare(
+      `
+      insert into users (lastfm_username, display_name, email, created_at)
+      values (?, ?, ?, ?)
+      on conflict(lastfm_username) do update set
+        display_name = excluded.display_name
+      returning id
+    `,
+    )
+    .get(username, displayName, null, now)
+
+  const userId = user.id
+
+  db.prepare(
+    `
+    insert into tokens (user_id, session_key, updated_at)
+    values (?, ?, ?)
+    on conflict(user_id) do update set session_key = excluded.session_key, updated_at = excluded.updated_at
+  `,
+  ).run(userId, sessionKey, now)
+
+  db.prepare(
+    `
+    insert into ingestion_state (user_id, last_after_ms, updated_at)
+    values (?, 0, ?)
+    on conflict(user_id) do nothing
+  `,
+  ).run(userId, now)
+
+  const sessionId = randomString(24)
+  const expiresAt = now + 30 * 24 * 60 * 60 * 1000
+  db.prepare(
+    `insert into sessions (session_id, user_id, created_at, expires_at) values (?, ?, ?, ?)`,
+  ).run(sessionId, userId, now, expiresAt)
+
+  let handoff = null
+  if (!opts.skipHandoff) {
+    handoff = randomString(32)
+    rememberSessionHandoff(handoff, sessionId)
+  }
+
+  return { sessionId, expiresAt, userId, username, displayName, handoff }
 }
 
 /** Signed cookie or Authorization: Bearer <raw session_id> (SPA fallback when cookies fail cross-port). */
@@ -402,6 +458,10 @@ app.get('/auth/login', async (req, res) => {
       maxAge: OAUTH_STATE_TTL_MS,
       path: '/',
     })
+    setCookie(res, OAUTH_PT_COOKIE, String(token), {
+      maxAge: OAUTH_STATE_TTL_MS,
+      path: '/',
+    })
     const lastfmCallbackAbs = `${FRONTEND_ORIGIN.replace(/\/$/, '')}/auth/callback`
     const useCb = String(process.env.LASTFM_AUTH_USE_CB ?? '').trim() === '1'
     // eslint-disable-next-line no-console
@@ -423,6 +483,7 @@ app.get('/auth/login', async (req, res) => {
 })
 
 app.get('/auth/callback', async (req, res) => {
+  let returnTo = FRONTEND_ORIGIN
   try {
     const token = firstQuery(req.query.token)?.trim()
     if (!token) {
@@ -434,7 +495,7 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     const consumed = consumeOAuthState(token)
-    let returnTo = consumed?.returnTo ?? null
+    returnTo = consumed?.returnTo ?? null
     if (!returnTo) {
       returnTo = readReturnToFromOAuthCookie(req)
     }
@@ -450,48 +511,9 @@ app.get('/auth/callback', async (req, res) => {
     }
     clearCookie(res, OAUTH_RT_COOKIE)
 
-    const { sessionKey, username } = await authGetSession(token)
-    const displayName = username
-    const now = Date.now()
-
-    const user = db
-      .prepare(
-        `
-        insert into users (lastfm_username, display_name, email, created_at)
-        values (?, ?, ?, ?)
-        on conflict(lastfm_username) do update set
-          display_name = excluded.display_name
-        returning id
-      `,
-      )
-      .get(username, displayName, null, now)
-
-    const userId = user.id
-
-    db.prepare(
-      `
-      insert into tokens (user_id, session_key, updated_at)
-      values (?, ?, ?)
-      on conflict(user_id) do update set session_key = excluded.session_key, updated_at = excluded.updated_at
-    `,
-    ).run(userId, sessionKey, now)
-
-    db.prepare(
-      `
-      insert into ingestion_state (user_id, last_after_ms, updated_at)
-      values (?, 0, ?)
-      on conflict(user_id) do nothing
-    `,
-    ).run(userId, now)
-
-    const sessionId = randomString(24)
-    const expiresAt = now + 30 * 24 * 60 * 60 * 1000
-    db.prepare(
-      `insert into sessions (session_id, user_id, created_at, expires_at) values (?, ?, ?, ?)`,
-    ).run(sessionId, userId, now, expiresAt)
-
-    const handoff = randomString(32)
-    rememberSessionHandoff(handoff, sessionId)
+    const result = await createLastfmSessionFromApprovedToken(token, { skipHandoff: false })
+    clearCookie(res, OAUTH_PT_COOKIE)
+    const { username, handoff } = result
     // eslint-disable-next-line no-console
     console.log('[auth/callback] ok instance=%s user=%s returnTo=%s', INSTANCE_ID, username, returnTo)
     // Do not Set-Cookie on this cross-site redirect — Safari drops it. SPA POSTs /auth/handoff.
@@ -503,6 +525,15 @@ app.get('/auth/callback', async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[auth/callback]', e)
     clearCookie(res, OAUTH_RT_COOKIE)
+    // Polling may have already exchanged the token and set `sid`; Last.fm then redirects here with a one-use token.
+    const sessionId = getSessionIdFromRequest(req)
+    if (sessionId) {
+      const row = db.prepare('select expires_at from sessions where session_id = ?').get(sessionId)
+      if (row && Date.now() <= row.expires_at) {
+        clearCookie(res, OAUTH_PT_COOKIE)
+        return res.redirect(302, `${returnTo}/?connected=1`)
+      }
+    }
     return res.redirect(
       302,
       `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent(msg)}`,
@@ -535,7 +566,47 @@ app.post('/auth/logout', (req, res) => {
   const sessionId = getSessionIdFromRequest(req)
   if (sessionId) db.prepare('delete from sessions where session_id = ?').run(sessionId)
   clearCookie(res, 'sid')
+  clearCookie(res, OAUTH_PT_COOKIE)
+  clearCookie(res, OAUTH_RT_COOKIE)
   res.json({ ok: true })
+})
+
+/**
+ * Poll after Last.fm approval: same token as auth.getToken works with auth.getSession once user approved,
+ * even if Last.fm never 302-redirects the browser to /auth/callback (oauth_pt cookie set on /auth/login).
+ */
+app.get('/api/auth/try-complete-lastfm', async (req, res) => {
+  try {
+    const token = req.signedCookies?.[OAUTH_PT_COOKIE]
+    if (!token || typeof token !== 'string') {
+      return res.json({ ok: false, state: 'none' })
+    }
+    const { sessionId, expiresAt, username, displayName, userId } = await createLastfmSessionFromApprovedToken(
+      token.trim(),
+      { skipHandoff: true },
+    )
+    clearCookie(res, OAUTH_PT_COOKIE)
+    clearCookie(res, OAUTH_RT_COOKIE)
+    setCookie(res, 'sid', sessionId, {
+      maxAge: expiresAt - Date.now(),
+    })
+    const lfUser = String(username).toLowerCase()
+    const isArtist = Boolean(ARTIST_LASTFM_USERNAME && lfUser === ARTIST_LASTFM_USERNAME)
+    return res.json({
+      ok: true,
+      session_id: sessionId,
+      user: {
+        id: userId,
+        lastfm_username: username,
+        display_name: displayName,
+        is_artist: isArtist,
+      },
+    })
+  } catch (e) {
+    // Last.fm often returns "invalid token" until the user taps approve — do not clear oauth_pt here.
+    const msg = e instanceof Error ? e.message : String(e)
+    return res.json({ ok: false, state: 'pending', detail: msg })
+  }
 })
 
 app.get('/api/session', requireUser, (req, res) => {

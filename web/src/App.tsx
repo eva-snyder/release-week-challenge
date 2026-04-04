@@ -1,5 +1,5 @@
 import './App.css'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FinishSignIn } from './FinishSignIn'
 import {
   apiFetch,
@@ -30,6 +30,11 @@ type Campaign = {
   endsAtMs: number
   status: 'upcoming' | 'live' | 'ended'
 }
+
+/** After opening Last.fm in the same browser, we poll until auth.getSession succeeds (Last.fm may not redirect to /auth/callback). */
+const LASTFM_POLL_KEY = 'tl_lastfm_poll'
+const LASTFM_POLL_MAX_MS = 15 * 60 * 1000
+const LASTFM_POLL_INTERVAL_MS = 2000
 
 /** React 18 Strict Mode runs mount effects twice in dev — handoff tokens are one-time, so share one in-flight request. */
 let handoffPromise: Promise<void> | null = null
@@ -97,6 +102,7 @@ function App() {
     mine: { plays: number; rank: number | null }
     campaign: { participants: number; total_plays: number }
   } | null>(null)
+  const [lastfmFinishing, setLastfmFinishing] = useState(false)
 
   function formatNetworkError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e)
@@ -123,7 +129,7 @@ function App() {
   }
 
   /** Resolves session first so a failed /api/campaign does not hide a valid login. */
-  async function refreshDashboard(): Promise<Session | null> {
+  const refreshDashboard = useCallback(async (): Promise<Session | null> => {
     const sRes = await apiFetch('/api/session')
     let nextSession: Session | null = null
     if (sRes.ok) {
@@ -186,7 +192,79 @@ function App() {
     setReady(true)
 
     return nextSession
-  }
+  }, [])
+
+  useEffect(() => {
+    if (session) return
+    let cancelled = false
+    let intervalId: number | undefined
+
+    function readPollStart(): number | null {
+      try {
+        const raw = localStorage.getItem(LASTFM_POLL_KEY)
+        if (!raw) return null
+        const ts = Number(raw)
+        if (!Number.isFinite(ts) || Date.now() - ts > LASTFM_POLL_MAX_MS) {
+          localStorage.removeItem(LASTFM_POLL_KEY)
+          return null
+        }
+        return ts
+      } catch {
+        return null
+      }
+    }
+
+    async function tryCompleteOnce() {
+      if (cancelled || readPollStart() == null) {
+        setLastfmFinishing(false)
+        return
+      }
+      setLastfmFinishing(true)
+      const res = await apiFetch('/api/auth/try-complete-lastfm')
+      if (cancelled) return
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        session_id?: string
+        user?: Session['user']
+      }
+      if (j.ok && j.user) {
+        try {
+          localStorage.removeItem(LASTFM_POLL_KEY)
+        } catch {
+          /* ignore */
+        }
+        if (j.session_id) setStoredSessionId(j.session_id)
+        await refreshDashboard()
+        const who = j.user.display_name?.trim() || j.user.lastfm_username
+        setNotice(`signed in as ${who}`)
+        setLastfmFinishing(false)
+        return
+      }
+      setLastfmFinishing(true)
+    }
+
+    if (readPollStart() == null) {
+      setLastfmFinishing(false)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    void tryCompleteOnce()
+    intervalId = window.setInterval(() => void tryCompleteOnce(), LASTFM_POLL_INTERVAL_MS)
+    const onVis = () => void tryCompleteOnce()
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === LASTFM_POLL_KEY && ev.newValue) void tryCompleteOnce()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      cancelled = true
+      if (intervalId) window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [session, refreshDashboard])
 
   useEffect(() => {
     run(async () => {
@@ -203,12 +281,22 @@ function App() {
       }
 
       if (url.searchParams.has('connected')) {
+        try {
+          localStorage.removeItem(LASTFM_POLL_KEY)
+        } catch {
+          /* ignore */
+        }
         url.searchParams.delete('connected')
         const qs = url.searchParams.toString()
         window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : '') + url.hash)
       }
 
       if (oauthSession) {
+        try {
+          localStorage.removeItem(LASTFM_POLL_KEY)
+        } catch {
+          /* ignore */
+        }
         await runOAuthHandoffOnce(oauthSession, (raw) => {
           try {
             const j = JSON.parse(raw) as { session_id?: string }
@@ -234,7 +322,7 @@ function App() {
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshDashboard])
 
   useEffect(() => {
     if (!notice) return
@@ -295,12 +383,19 @@ function App() {
             <a
               className="btn btn--primary"
               href={lastfmLoginHint}
+              onClick={() => {
+                try {
+                  localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
+                } catch {
+                  /* ignore */
+                }
+              }}
             >
               sign in with last.fm
             </a>
             <p className="auth-hint body-quiet">
-              Stuck after Last.fm?{' '}
-              <a href="/auth/finish">Paste your Last.fm URL here</a> — we’ll finish sign-in for you.
+              After you tap approve on Last.fm, switch back to this tab — we’ll finish sign-in automatically. Or{' '}
+              <a href="/auth/finish">paste the Last.fm URL</a> if you’re on another device.
             </p>
           </div>
         )}
@@ -496,11 +591,14 @@ function App() {
           </section>
         ) : null}
 
-        {(busy || error || notice) && (
+        {(busy || error || notice || lastfmFinishing) && (
           <div className="toast-row" role="status">
             {busy ? <span className="toast toast--muted">updating…</span> : null}
             {error ? <span className="toast toast--err">{error}</span> : null}
             {notice ? <span className="toast toast--ok">{notice}</span> : null}
+            {lastfmFinishing && !session ? (
+              <span className="toast toast--muted">finishing sign-in…</span>
+            ) : null}
           </div>
         )}
       </main>
