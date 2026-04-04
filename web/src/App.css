@@ -50,6 +50,20 @@
   max-width: min(340px, 92vw);
 }
 
+.auth-hint {
+  margin: 0;
+  text-align: right;
+  max-width: min(340px, 92vw);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.auth-hint code {
+  word-break: break-all;
+  font-size: 0.68rem;
+}
+
 .auth-greet {
   font-family: var(--font-display);
   font-size: 0.95rem;

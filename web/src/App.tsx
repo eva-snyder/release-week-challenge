@@ -293,6 +293,14 @@ function App() {
             >
               sign in with last.fm
             </a>
+            <p className="auth-hint body-quiet">
+              On Last.fm, confirm access for this app (not only cookie banners). If the site doesn’t send
+              you back here, copy <code>token=…</code> from the Last.fm address bar and open{' '}
+              <code>
+                {typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?token=PASTE
+              </code>{' '}
+              in this browser.
+            </p>
           </div>
         )}
       </div>

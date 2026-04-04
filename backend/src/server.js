@@ -403,12 +403,14 @@ app.get('/auth/login', async (req, res) => {
       path: '/',
     })
     const lastfmCallbackAbs = `${FRONTEND_ORIGIN.replace(/\/$/, '')}/auth/callback`
+    const useCb = String(process.env.LASTFM_AUTH_USE_CB ?? '').trim() === '1'
     // eslint-disable-next-line no-console
     console.log(
-      '[auth/login] instance=%s returnTo=%s lastfm_cb=%s token_prefix=%s',
+      '[auth/login] instance=%s returnTo=%s lastfm_cb=%s use_cb_env=%s token_prefix=%s',
       INSTANCE_ID,
       returnTo,
       lastfmCallbackAbs,
+      useCb ? '1' : '0',
       String(token).slice(0, 8),
     )
     res.redirect(302, buildAuthorizeUrl(token, lastfmCallbackAbs))
