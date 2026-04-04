@@ -383,9 +383,12 @@ function App() {
   /**
    * After each UTC quarter-hour, refresh several times (every 15s for 2 minutes) so slow ingest
    * still updates the leaderboard without a manual tap.
+   *
+   * Runs for everyone while the challenge is live (not only signed-in users), so the public
+   * leaderboard updates too.
    */
   useEffect(() => {
-    if (!session || campaign?.status !== 'live') return
+    if (!campaign || campaign.status !== 'live') return
     let cancelled = false
     const timeouts: ReturnType<typeof setTimeout>[] = []
 
@@ -416,7 +419,17 @@ function App() {
       cancelled = true
       for (const id of timeouts) window.clearTimeout(id)
     }
-  }, [session, campaign?.status, campaign?.id, refreshDashboard])
+  }, [campaign?.status, campaign?.id, refreshDashboard])
+
+  /** Background tabs throttle timers; refresh once when the user comes back so the board catches up. */
+  useEffect(() => {
+    if (!campaign || campaign.status !== 'live') return
+    function onVis() {
+      if (document.visibilityState === 'visible') void refreshDashboard()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [campaign?.status, campaign?.id, refreshDashboard])
 
   /** Dev only: open `/?preview_winner=1` to preview the “you won” block without an ended challenge or rank #1. */
   const previewWinner =
