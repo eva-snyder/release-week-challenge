@@ -14,6 +14,9 @@ const {
   buildAuthorizeUrl,
   authGetSession,
 } = require('./lastfm')
+
+/** Logged on auth routes + /health — if Railway logs show different ids for /auth/login vs /auth/callback, you have multiple replicas (SQLite OAuth breaks). */
+const INSTANCE_ID = randomString(8)
 const { ingestOnce: runIngestOnce } = require('./ingest')
 const {
   bootstrapChallengeFromEnvIfEmpty,
@@ -29,7 +32,7 @@ const DB_PATH = process.env.DB_PATH ?? './data.sqlite'
 // Default matches typical dev (127.0.0.1 Vite + 127.0.0.1 backend). OAuth error
 // redirects use this when state is missing/expired — localhost here caused “jump to
 // localhost:5173/” with no visible Spotify step.
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:5173'
+const FRONTEND_ORIGIN = (process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:5173').trim()
 const SESSION_SECRET = process.env.SESSION_SECRET ?? 'dev_secret_change_me'
 const INGEST_CRON = process.env.INGEST_CRON ?? '*/15 * * * *'
 const ARTIST_LASTFM_USERNAME = (process.env.ARTIST_LASTFM_USERNAME ?? '').toLowerCase()
@@ -68,7 +71,7 @@ const BUILD_ID = 'lastfm-v1'
 if (IS_PRODUCTION) {
   // eslint-disable-next-line no-console
   console.warn(
-    '[startup] OAuth + sessions use SQLite on this machine. Use exactly one replica (or shared DB); multiple instances break Last.fm login.',
+    `[startup] instance=${INSTANCE_ID} OAuth + sessions use SQLite. Use exactly one replica (or shared DB); multiple instances break Last.fm login.`,
   )
 }
 
@@ -309,6 +312,17 @@ app.get('/health', (_req, res) =>
   res.json({
     ok: true,
     build: BUILD_ID,
+    instanceId: INSTANCE_ID,
+    nodeEnv: process.env.NODE_ENV ?? null,
+    frontendOrigin: FRONTEND_ORIGIN,
+    frontendOriginLooksDev:
+      IS_PRODUCTION && /127\.0\.0\.1|localhost/i.test(FRONTEND_ORIGIN),
+    lastfm: {
+      hasApiKey: Boolean(String(process.env.LASTFM_API_KEY ?? '').trim()),
+      hasApiSecret: Boolean(String(process.env.LASTFM_API_SECRET ?? '').trim()),
+    },
+    sqliteOAuthNote:
+      'OAuth state is stored in SQLite on this process. Multiple replicas without sticky sessions break Last.fm login.',
     dbPath: DB_PATH,
     cwd: process.cwd(),
     hasWebDist: HAS_WEB_DIST,
@@ -343,7 +357,12 @@ app.get('/auth/login', async (req, res) => {
       FRONTEND_ORIGIN
     rememberOAuthState(token, returnTo)
     // eslint-disable-next-line no-console
-    console.log('[auth/login] returnTo=%s token_prefix=%s', returnTo, String(token).slice(0, 8))
+    console.log(
+      '[auth/login] instance=%s returnTo=%s token_prefix=%s',
+      INSTANCE_ID,
+      returnTo,
+      String(token).slice(0, 8),
+    )
     res.redirect(302, buildAuthorizeUrl(token))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -355,7 +374,7 @@ app.get('/auth/login', async (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
   try {
-    const token = firstQuery(req.query.token)
+    const token = firstQuery(req.query.token)?.trim()
     if (!token) {
       return res.redirect(
         302,
@@ -366,7 +385,11 @@ app.get('/auth/callback', async (req, res) => {
     const consumed = consumeOAuthState(token)
     if (!consumed) {
       // eslint-disable-next-line no-console
-      console.warn('[auth/callback] oauth token unknown or expired (restart mid-flow?)')
+      console.warn(
+        '[auth/callback] oauth_state miss instance=%s token_len=%s (wrong replica / expired / new API keys without fresh login?)',
+        INSTANCE_ID,
+        String(token).length,
+      )
       return res.redirect(
         302,
         `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('oauth_state_invalid_retry_sign_in')}`,
@@ -417,7 +440,7 @@ app.get('/auth/callback', async (req, res) => {
     const handoff = randomString(32)
     rememberSessionHandoff(handoff, sessionId)
     // eslint-disable-next-line no-console
-    console.log('[auth/callback] ok user=%s returnTo=%s', username, returnTo)
+    console.log('[auth/callback] ok instance=%s user=%s returnTo=%s', INSTANCE_ID, username, returnTo)
     // Do not Set-Cookie on this cross-site redirect — Safari drops it. SPA POSTs /auth/handoff.
     res.redirect(
       `${returnTo}/?oauth_session=${encodeURIComponent(handoff)}`,

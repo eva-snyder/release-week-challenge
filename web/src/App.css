@@ -444,6 +444,20 @@ a.btn {
   color: var(--text-muted);
 }
 
+.footer__line--meta {
+  margin-top: 12px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  max-width: 52ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.footer__line--meta code {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .footer__blurb {
   font-family: var(--font-ui);
   font-size: 0.8125rem;

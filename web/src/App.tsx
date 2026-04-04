@@ -485,10 +485,14 @@ function App() {
       </main>
 
       <footer className="footer">
-        {/* <p className="footer__line">eva's release week challenge · spotify</p> */}
         <p className="footer__line">
           counts use last.fm scrobbles — connect spotify (or your player) to last.fm so listens show up. prize
           contact may use your last.fm username or a separate process you run as the artist.
+        </p>
+        <p className="footer__line footer__line--meta">
+          <a href="/health">api status</a> — if sign-in fails, check{' '}
+          <code>frontendOrigin</code> matches this site and note <code>instanceId</code> in Railway logs for
+          login vs callback (must match one replica).
         </p>
       </footer>
     </div>

@@ -7,10 +7,18 @@ function assertEnv(name, value) {
   return value
 }
 
+function stripQuotes(s) {
+  const t = String(s).trim()
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    return t.slice(1, -1).trim()
+  }
+  return t
+}
+
 function getConfig() {
   return {
-    apiKey: assertEnv('LASTFM_API_KEY', process.env.LASTFM_API_KEY),
-    apiSecret: assertEnv('LASTFM_API_SECRET', process.env.LASTFM_API_SECRET),
+    apiKey: assertEnv('LASTFM_API_KEY', stripQuotes(process.env.LASTFM_API_KEY)),
+    apiSecret: assertEnv('LASTFM_API_SECRET', stripQuotes(process.env.LASTFM_API_SECRET)),
   }
 }
 
@@ -63,7 +71,7 @@ async function authGetToken() {
   const j = await lastfmGet({ method: 'auth.getToken' })
   const token = j?.token
   if (!token) throw new Error('Last.fm auth.getToken: no token')
-  return String(token)
+  return String(token).trim()
 }
 
 function buildAuthorizeUrl(token) {
