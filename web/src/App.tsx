@@ -521,7 +521,7 @@ function App() {
             {session ? '02 — everyone' : '01 — everyone'}
           </p>
           <h2 id="lb-heading">leaderboard</h2>
-          <p className="body-quiet body-quiet--tight">top ten for this challenge window.</p>
+          <p className="body-quiet body-quiet--tight">top ten for this challenge window. refreshed every 15 minutes.</p>
         </div>
         <button
           type="button"
