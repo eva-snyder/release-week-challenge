@@ -556,7 +556,7 @@ function App() {
           </p>
           <h2 id="lb-heading">leaderboard</h2>
           <p className="body-quiet body-quiet--tight">
-            top ten for this challenge window. refreshes each quarter-hour.
+            top ten for this challenge window. refreshes every 15 minutes.
           </p>
         </div>
         <button
@@ -884,9 +884,6 @@ function App() {
     <div className={`page app-lowercase${!session ? ' page--signed-out' : ''}`}>
       {session ? (
         <div className="auth-bar" aria-label="Account">
-          <span className="auth-greet" title={session.user.lastfm_username}>
-            hi, {session.user.display_name?.trim() || session.user.lastfm_username}
-          </span>
           <span className="auth-pill auth-pill--ok">signed in</span>
           {session.user.is_artist ? (
             <span className="auth-pill">artist</span>

@@ -117,17 +117,6 @@
   }
 }
 
-.auth-greet {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  color: var(--text-h);
-  margin-right: 4px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Guest join block: directly under hero, above leaderboard */
 .auth-cta {
   width: 100%;
@@ -301,12 +290,15 @@
     gap: 14px;
   }
 
+  /* ~2× prior 128px column: full content width so the tee fills the band on small screens */
   .merch-prize-row__visual {
     width: 100%;
-    max-width: 128px;
-    align-self: center;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 100%;
+    align-self: stretch;
+  }
+
+  .merch-prize-row__img-wrap {
+    width: 100%;
   }
 }
 
