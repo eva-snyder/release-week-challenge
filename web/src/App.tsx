@@ -6,6 +6,7 @@ import {
   clearStoredSessionId,
   setStoredSessionId,
   lastfmLoginUrl,
+  LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL,
 } from './authUrl'
 
 type Session = {
@@ -371,24 +372,34 @@ function App() {
           </>
         ) : (
           <div className="auth-signin">
-            <a
-              className="btn btn--primary"
-              href={lastfmLoginHint}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                try {
-                  localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
-                } catch {
-                  /* ignore */
-                }
-                setLastfmPollKick((k) => k + 1)
-              }}
-            >
-              sign in with last.fm
-            </a>
+            <div className="auth-signin__actions">
+              <a
+                className="btn btn--primary"
+                href={lastfmLoginHint}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  try {
+                    localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
+                  } catch {
+                    /* ignore */
+                  }
+                  setLastfmPollKick((k) => k + 1)
+                }}
+              >
+                sign in with last.fm
+              </a>
+              <a
+                className="btn btn--ghost"
+                href={LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                new? set up last.fm + Spotify
+              </a>
+            </div>
             <p className="auth-hint body-quiet">
-              Last.fm opens in a new tab. After you approve, come back here — we’ll finish sign-in automatically. Or{' '}
+              Sign-in opens in a new tab. After you approve, come back here — we’ll finish automatically. Or{' '}
               <a href="/auth/finish">paste the Last.fm URL</a> if you’re on another device.
             </p>
           </div>
@@ -462,8 +473,15 @@ function App() {
             </div>
           ) : (
             <p className="body-quiet">
-              sign in with last.fm to count scrobbles that match this track (link spotify → last.fm so plays
-              appear).
+              sign in with last.fm to count plays for this track.{' '}
+              <a
+                href={LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                no last.fm yet?
+              </a>{' '}
+              that page helps you create an account and connect Spotify so scrobbles show up.
             </p>
           )}
         </section>
