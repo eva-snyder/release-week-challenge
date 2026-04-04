@@ -26,7 +26,7 @@ export function FinishSignIn() {
   const go = useCallback(() => {
     const token = extractLastfmTokenFromPastedInput(value)
     if (!token) {
-      setErr('Could not find a token. Paste the full Last.fm page URL, or just the token.')
+      setErr('Could not read that link. Paste the full URL from the Last.fm address bar (or the long string Last.fm shows).')
       return
     }
     setErr(null)
@@ -42,19 +42,19 @@ export function FinishSignIn() {
         </a>
         <h1 className="finish-signin__title">finish last.fm sign-in</h1>
         <p className="body-quiet finish-signin__lede">
-          If Last.fm didn’t send you back here automatically, paste the <strong>address bar</strong> from
-          the Last.fm tab (the one that contains <code>token=</code>), or paste only the token. Then
-          continue — we’ll send you through the same step as a normal redirect.
+          Use this if you approved Last.fm on another device or browser. After you tap approve, copy the{' '}
+          <strong>whole URL</strong> from Last.fm’s address bar (or the “here is the URL” line on their
+          confirmation page) and paste it below.
         </p>
       </header>
       <label className="finish-signin__label" htmlFor="finish-paste">
-        Last.fm URL or token
+        Link from Last.fm
       </label>
       <textarea
         id="finish-paste"
         className="finish-signin__textarea"
         rows={3}
-        placeholder="https://www.last.fm/api/auth?api_key=…&token=…"
+        placeholder="Paste the full https://… URL from Last.fm"
         value={value}
         onChange={(e) => {
           setValue(e.target.value)
