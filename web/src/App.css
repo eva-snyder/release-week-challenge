@@ -490,6 +490,22 @@
   opacity: 0.9;
 }
 
+.updates-opt__subscribed {
+  margin-top: 4px;
+}
+
+.updates-opt__subscribed-msg {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  max-width: 44ch;
+}
+
+.updates-opt__change {
+  padding: 4px 0;
+}
+
 .updates-opt__lede {
   margin-bottom: 12px;
 }

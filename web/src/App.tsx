@@ -114,6 +114,8 @@ function App() {
     email: '',
     marketing_opt_in: false,
   })
+  /** When opted in, hide the form until the user taps "change preferences". */
+  const [showMarketingPrefsForm, setShowMarketingPrefsForm] = useState(false)
   const [lastfmFinishing, setLastfmFinishing] = useState(false)
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
@@ -200,6 +202,7 @@ function App() {
       setSession(null)
       setMyStats(null)
       setMarketingForm({ email: '', marketing_opt_in: false })
+      setShowMarketingPrefsForm(false)
       setLeaderboardContacts([])
     }
 
@@ -705,6 +708,8 @@ function App() {
     </section>
   )
 
+  const marketingSubscribed = marketingForm.marketing_opt_in
+
   const updatesSection = session ? (
     <section className="band band--updates" aria-labelledby="updates-heading">
       <div className="updates-opt">
@@ -719,79 +724,100 @@ function App() {
             optional
           </span>
         </div>
-        <p className="body-quiet body-quiet--tight updates-opt__lede">
-          if you want a heads-up when the next challenge goes live, leave your email and opt in
-          below.
-        </p>
-        <form
-          className="updates-opt__form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            run(async () => {
-              const res = await apiFetch('/api/me/contact-preferences', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  email: marketingForm.email.trim(),
-                  marketing_opt_in: marketingForm.marketing_opt_in,
-                }),
-              })
-              if (!res.ok) {
-                const errBody = await res.json().catch(() => ({}))
-                const code =
-                  errBody && typeof errBody === 'object' && 'error' in errBody
-                    ? String((errBody as { error?: string }).error)
-                    : ''
-                if (code === 'invalid_email') {
-                  throw new Error('Enter a valid email, or turn off the checkbox.')
-                }
-                throw new Error('Could not save your preferences. Try again.')
-              }
-              const j = (await res.json()) as {
-                email?: string | null
-                marketing_opt_in?: boolean
-              }
-              setMarketingForm({
-                email: j.email?.trim() ?? '',
-                marketing_opt_in: Boolean(j.marketing_opt_in),
-              })
-              setPrizeForm((f) => ({
-                ...f,
-                email: j.email?.trim() ?? f.email,
-              }))
-              setNotice('preferences saved')
-            })
-          }}
-        >
-          <label className="updates-opt__field">
-            <span className="updates-opt__label">email</span>
-            <input
-              type="email"
-              name="updates_email"
-              autoComplete="email"
-              className="updates-opt__input"
-              value={marketingForm.email}
-              onChange={(ev) => setMarketingForm((f) => ({ ...f, email: ev.target.value }))}
-              placeholder="you@example.com"
-            />
-          </label>
-          <label className="updates-opt__check">
-            <input
-              type="checkbox"
-              checked={marketingForm.marketing_opt_in}
-              onChange={(ev) =>
-                setMarketingForm((f) => ({
-                  ...f,
-                  marketing_opt_in: ev.target.checked,
-                }))
-              }
-            />
-            <span>email me when there&apos;s a new challenge</span>
-          </label>
-          <button type="submit" className="btn btn--outline" disabled={busy}>
-            save preferences
-          </button>
-        </form>
+        {marketingSubscribed && !showMarketingPrefsForm ? (
+          <div className="updates-opt__subscribed">
+            <p className="updates-opt__subscribed-msg" role="status">
+              you&apos;ll be updated when new challenges drop.
+            </p>
+            <button
+              type="button"
+              className="btn btn--text updates-opt__change"
+              onClick={() => setShowMarketingPrefsForm(true)}
+            >
+              change preferences
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="body-quiet body-quiet--tight updates-opt__lede">
+              if you want a heads-up when the next challenge goes live, leave your email and opt in
+              below.
+            </p>
+            <form
+              className="updates-opt__form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                run(async () => {
+                  const res = await apiFetch('/api/me/contact-preferences', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: marketingForm.email.trim(),
+                      marketing_opt_in: marketingForm.marketing_opt_in,
+                    }),
+                  })
+                  if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}))
+                    const code =
+                      errBody && typeof errBody === 'object' && 'error' in errBody
+                        ? String((errBody as { error?: string }).error)
+                        : ''
+                    if (code === 'invalid_email') {
+                      throw new Error('Enter a valid email, or turn off the checkbox.')
+                    }
+                    throw new Error('Could not save your preferences. Try again.')
+                  }
+                  const j = (await res.json()) as {
+                    email?: string | null
+                    marketing_opt_in?: boolean
+                  }
+                  const nextOptIn = Boolean(j.marketing_opt_in)
+                  setMarketingForm({
+                    email: j.email?.trim() ?? '',
+                    marketing_opt_in: nextOptIn,
+                  })
+                  setPrizeForm((f) => ({
+                    ...f,
+                    email: j.email?.trim() ?? f.email,
+                  }))
+                  if (nextOptIn) {
+                    setShowMarketingPrefsForm(false)
+                  }
+                  setNotice('preferences saved')
+                })
+              }}
+            >
+              <label className="updates-opt__field">
+                <span className="updates-opt__label">email</span>
+                <input
+                  type="email"
+                  name="updates_email"
+                  autoComplete="email"
+                  className="updates-opt__input"
+                  value={marketingForm.email}
+                  onChange={(ev) => setMarketingForm((f) => ({ ...f, email: ev.target.value }))}
+                  placeholder="you@example.com"
+                />
+              </label>
+              <label className="updates-opt__check">
+                <input
+                  type="checkbox"
+                  checked={marketingForm.marketing_opt_in}
+                  onChange={(ev) =>
+                    setMarketingForm((f) => ({
+                      ...f,
+                      marketing_opt_in: ev.target.checked,
+                    }))
+                  }
+                />
+                <span>email me when there&apos;s a new challenge</span>
+              </label>
+              <button type="submit" className="btn btn--outline" disabled={busy}>
+                save preferences
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </section>
   ) : null
@@ -820,6 +846,7 @@ function App() {
                 setLeaderboardContacts([])
                 setMyStats(null)
                 setMarketingForm({ email: '', marketing_opt_in: false })
+                setShowMarketingPrefsForm(false)
               })
             }
           >
