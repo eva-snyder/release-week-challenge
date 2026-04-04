@@ -103,6 +103,8 @@ function App() {
     campaign: { participants: number; total_plays: number }
   } | null>(null)
   const [lastfmFinishing, setLastfmFinishing] = useState(false)
+  /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
+  const [lastfmPollKick, setLastfmPollKick] = useState(0)
 
   function formatNetworkError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e)
@@ -264,7 +266,7 @@ function App() {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('storage', onStorage)
     }
-  }, [session, refreshDashboard])
+  }, [session, refreshDashboard, lastfmPollKick])
 
   useEffect(() => {
     run(async () => {
@@ -383,18 +385,21 @@ function App() {
             <a
               className="btn btn--primary"
               href={lastfmLoginHint}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={() => {
                 try {
                   localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
                 } catch {
                   /* ignore */
                 }
+                setLastfmPollKick((k) => k + 1)
               }}
             >
               sign in with last.fm
             </a>
             <p className="auth-hint body-quiet">
-              After you tap approve on Last.fm, switch back to this tab — we’ll finish sign-in automatically. Or{' '}
+              Last.fm opens in a new tab. After you approve, come back here — we’ll finish sign-in automatically. Or{' '}
               <a href="/auth/finish">paste the Last.fm URL</a> if you’re on another device.
             </p>
           </div>
