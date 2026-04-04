@@ -2,6 +2,8 @@
 const DEFAULT_CAMPAIGN_STARTS_AT = '2026-03-27T00:00:00Z'
 const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-04T00:00:00Z'
 
+const { normalizeMeta } = require('./lastfm')
+
 function campaignWindowMsFromEnvOrDefaults() {
   const starts = Date.parse(process.env.CAMPAIGN_STARTS_AT ?? DEFAULT_CAMPAIGN_STARTS_AT)
   const ends = Date.parse(process.env.CAMPAIGN_ENDS_AT ?? DEFAULT_CAMPAIGN_ENDS_AT)
@@ -9,11 +11,20 @@ function campaignWindowMsFromEnvOrDefaults() {
   return { starts, ends }
 }
 
+function canonicalTrackKey(artist, trackName) {
+  const a = normalizeMeta(artist)
+  const t = normalizeMeta(trackName)
+  return `lf:${a}|${t}`
+}
+
 function campaignMetadataFromEnvOrDefaults() {
+  const artist = process.env.CAMPAIGN_ARTIST ?? 'Eva Snyder'
+  const trackName = process.env.CAMPAIGN_TRACK_NAME ?? 'turkeys'
   return {
     title: process.env.CAMPAIGN_TITLE ?? 'Release challenge',
-    trackId: process.env.CAMPAIGN_TRACK_ID ?? '3aFYGT0C4zbMH6EQ1kdqcf',
-    trackName: process.env.CAMPAIGN_TRACK_NAME ?? 'turkeys',
+    trackArtist: artist,
+    trackName,
+    trackId: canonicalTrackKey(artist, trackName),
   }
 }
 
@@ -24,33 +35,32 @@ function bootstrapChallengeFromEnvIfEmpty(db) {
   const n = Number(db.prepare('select count(*) as c from challenges').get().c ?? 0)
   if (n > 0) return
 
-  const { title, trackId, trackName } = campaignMetadataFromEnvOrDefaults()
+  const { title, trackId, trackName, trackArtist } = campaignMetadataFromEnvOrDefaults()
   const w = campaignWindowMsFromEnvOrDefaults()
   if (!w) return
   const now = Date.now()
 
   db.prepare(
     `
-    insert into challenges (title, track_id, track_name, starts_at_ms, ends_at_ms, created_at_ms)
-    values (?, ?, ?, ?, ?, ?)
+    insert into challenges (title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms, created_at_ms)
+    values (?, ?, ?, ?, ?, ?, ?)
   `,
-  ).run(title, trackId, trackName, w.starts, w.ends, now)
+  ).run(title, trackId, trackName, trackArtist, w.starts, w.ends, now)
 }
 
 /**
  * Keeps the latest challenge row aligned with `CAMPAIGN_*` env (or code defaults).
- * Needed when the DB was bootstrapped with older dates or placeholder track but env/code were updated.
  * @param {import('better-sqlite3').Database} db
  */
 function syncLatestChallengeWindowFromEnvOrDefaults(db) {
   const w = campaignWindowMsFromEnvOrDefaults()
   if (!w) return
-  const { title, trackId, trackName } = campaignMetadataFromEnvOrDefaults()
+  const { title, trackId, trackName, trackArtist } = campaignMetadataFromEnvOrDefaults()
   const row = db.prepare('select id from challenges order by id desc limit 1').get()
   if (!row) return
   db.prepare(
-    `update challenges set title = ?, track_id = ?, track_name = ?, starts_at_ms = ?, ends_at_ms = ? where id = ?`,
-  ).run(title, trackId, trackName, w.starts, w.ends, row.id)
+    `update challenges set title = ?, track_id = ?, track_name = ?, track_artist = ?, starts_at_ms = ?, ends_at_ms = ? where id = ?`,
+  ).run(title, trackId, trackName, trackArtist, w.starts, w.ends, row.id)
 }
 
 /**
@@ -61,7 +71,7 @@ function getActiveChallengeForIngest(db, now = Date.now()) {
   return db
     .prepare(
       `
-      select id, title, track_id, track_name, starts_at_ms, ends_at_ms
+      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms
       from challenges
       where starts_at_ms <= ? and ends_at_ms > ?
       order by id desc
@@ -79,7 +89,7 @@ function getChallengeForDisplay(db, now = Date.now()) {
   const active = db
     .prepare(
       `
-      select id, title, track_id, track_name, starts_at_ms, ends_at_ms
+      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms
       from challenges
       where starts_at_ms <= ? and ends_at_ms > ?
       order by id desc
@@ -92,7 +102,7 @@ function getChallengeForDisplay(db, now = Date.now()) {
   const last = db
     .prepare(
       `
-      select id, title, track_id, track_name, starts_at_ms, ends_at_ms
+      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms
       from challenges
       order by id desc
       limit 1
@@ -110,6 +120,7 @@ function rowToCampaignPayload(row, status) {
     title: row.title,
     trackId: row.track_id,
     trackName: row.track_name,
+    trackArtist: row.track_artist ?? '',
     startsAt: new Date(row.starts_at_ms).toISOString(),
     endsAt: new Date(row.ends_at_ms).toISOString(),
     startsAtMs: row.starts_at_ms,
@@ -124,4 +135,6 @@ module.exports = {
   getActiveChallengeForIngest,
   getChallengeForDisplay,
   rowToCampaignPayload,
+  canonicalTrackKey,
+  normalizeMeta,
 }

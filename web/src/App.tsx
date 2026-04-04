@@ -4,14 +4,14 @@ import {
   apiFetch,
   clearStoredSessionId,
   setStoredSessionId,
-  spotifyLoginUrl,
+  lastfmLoginUrl,
 } from './authUrl'
 
 type Session = {
   ok: true
   user: {
     id: number
-    spotify_user_id: string
+    lastfm_username: string
     display_name: string | null
     is_artist: boolean
   }
@@ -22,6 +22,7 @@ type Campaign = {
   title: string
   trackId: string
   trackName: string
+  trackArtist: string
   startsAt: string
   endsAt: string
   startsAtMs: number
@@ -77,11 +78,11 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [leaderboard, setLeaderboard] = useState<
-    Array<{ spotify_user_id: string; display_name: string | null; plays: number }>
+    Array<{ lastfm_username: string; display_name: string | null; plays: number }>
   >([])
   const [leaderboardContacts, setLeaderboardContacts] = useState<
     Array<{
-      spotify_user_id: string
+      lastfm_username: string
       display_name: string | null
       email: string | null
       plays: number
@@ -151,7 +152,7 @@ function App() {
       if (contRes.ok) {
         const contJson = (await contRes.json()) as {
           rows?: Array<{
-            spotify_user_id: string
+            lastfm_username: string
             display_name: string | null
             email: string | null
             plays: number
@@ -199,7 +200,7 @@ function App() {
       if (oauthSession) {
         if (nextSession) {
           const who =
-            nextSession.user.display_name?.trim() || nextSession.user.spotify_user_id
+            nextSession.user.display_name?.trim() || nextSession.user.lastfm_username
           setNotice(`signed in as ${who}`)
         } else {
           setNotice('handoff succeeded but session check failed — refresh and ensure the API on :8787 is running.')
@@ -216,8 +217,8 @@ function App() {
   }, [notice])
 
   // Use a cache-busted URL so Chrome doesn't reuse a previously-cached redirect chain.
-  const spotifyLoginHint = useMemo(
-    () => spotifyLoginUrl({ cacheBust: true }),
+  const lastfmLoginHint = useMemo(
+    () => lastfmLoginUrl({ cacheBust: true }),
     [],
   )
 
@@ -238,8 +239,8 @@ function App() {
       <div className="auth-bar" aria-label="Account">
         {session ? (
           <>
-            <span className="auth-greet" title={session.user.spotify_user_id}>
-              hi, {session.user.display_name?.trim() || session.user.spotify_user_id}
+            <span className="auth-greet" title={session.user.lastfm_username}>
+              hi, {session.user.display_name?.trim() || session.user.lastfm_username}
             </span>
             <span className="auth-pill auth-pill--ok">signed in</span>
             {session.user.is_artist ? (
@@ -267,9 +268,9 @@ function App() {
           <div className="auth-signin">
             <a
               className="btn btn--primary"
-              href={spotifyLoginHint}
+              href={lastfmLoginHint}
             >
-              sign in with spotify
+              sign in with last.fm
             </a>
           </div>
         )}
@@ -278,7 +279,7 @@ function App() {
       <header className="hero">
         {session ? (
           <p className="hero__hi" aria-live="polite">
-            hi, {session.user.display_name?.trim() || session.user.spotify_user_id}
+            hi, {session.user.display_name?.trim() || session.user.lastfm_username}
           </p>
         ) : null}
         <h1 className="hero__title">eva's release week challenge</h1>
@@ -287,7 +288,7 @@ function App() {
           {campaign ? (
             <>
               {' '}
-              · <code>{campaign.trackName}</code>
+              · <code>{campaign.trackArtist}</code> — <code>{campaign.trackName}</code>
             </>
           ) : null}
         </p>
@@ -341,7 +342,10 @@ function App() {
               </div>
             </div>
           ) : (
-            <p className="body-quiet">sign in to see how many times you’ve played the track.</p>
+            <p className="body-quiet">
+              sign in with last.fm to count scrobbles that match this track (link spotify → last.fm so plays
+              appear).
+            </p>
           )}
         </section>
 
@@ -374,7 +378,7 @@ function App() {
               <p className="lb-empty">no plays recorded yet.</p>
             ) : (
               leaderboard.map((row, i) => (
-                <div className="lb-row" key={row.spotify_user_id} role="row">
+                <div className="lb-row" key={row.lastfm_username} role="row">
                   <span className="lb-rank" role="cell">
                     {i + 1}
                   </span>
@@ -404,7 +408,7 @@ function App() {
             </div>
             {campaign?.status === 'live' || campaign?.status === 'upcoming' ? (
               <p className="body-quiet artist-tools__note">
-                Streams are polled until{' '}
+                Scrobbles are polled until{' '}
                 {campaign
                   ? new Date(campaign.endsAt).toLocaleString(undefined, {
                       dateStyle: 'medium',
@@ -428,14 +432,13 @@ function App() {
                 })
               }
             >
-              pull latest from spotify
+              pull latest from last.fm
             </button>
 
             <div className="artist-contacts">
-              <h3 className="artist-contacts__title">listener emails (top 10)</h3>
+              <h3 className="artist-contacts__title">listeners (top 10)</h3>
               <p className="body-quiet body-quiet--tight">
-                Email comes from Spotify when someone signs in and grants access. Anyone who joined before email
-                was enabled may need to sign out and sign in again once.
+                Last.fm usernames for prize follow-up. Email is not collected via Last.fm sign-in.
               </p>
               {leaderboardContacts.length === 0 ? (
                 <p className="body-quiet">no listeners with plays in this challenge yet.</p>
@@ -444,15 +447,15 @@ function App() {
                   <div className="artist-contacts__row artist-contacts__row--head" role="row">
                     <span role="columnheader">#</span>
                     <span role="columnheader">name</span>
-                    <span role="columnheader">email</span>
+                    <span role="columnheader">last.fm</span>
                     <span role="columnheader">plays</span>
                   </div>
                   {leaderboardContacts.map((row, i) => (
-                    <div className="artist-contacts__row" key={row.spotify_user_id} role="row">
+                    <div className="artist-contacts__row" key={row.lastfm_username} role="row">
                       <span role="cell">{i + 1}</span>
                       <span role="cell">{row.display_name ?? '—'}</span>
                       <span role="cell" className="artist-contacts__email">
-                        {row.email ?? '—'}
+                        {row.lastfm_username}
                       </span>
                       <span role="cell">{row.plays}</span>
                     </div>
@@ -475,8 +478,8 @@ function App() {
       <footer className="footer">
         {/* <p className="footer__line">eva's release week challenge · spotify</p> */}
         <p className="footer__line">
-          winners at the end of the challenge will be emailed using the address linked to the spotify account they
-          signed in with (grant email access when signing in).
+          counts use last.fm scrobbles — connect spotify (or your player) to last.fm so listens show up. prize
+          contact may use your last.fm username or a separate process you run as the artist.
         </p>
       </footer>
     </div>

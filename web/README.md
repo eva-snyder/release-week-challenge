@@ -6,7 +6,7 @@
 
 ```bash
 cd ../backend
-cp .env.example .env   # once; fill Spotify credentials
+cp .env.example .env   # once; fill Last.fm API key + secret
 npm install
 npm run dev
 ```
@@ -20,16 +20,16 @@ npm run dev
 
 ### Important: use `127.0.0.1`, not `localhost`
 
-Spotify’s redirect URI is usually `http://127.0.0.1:8787/auth/callback`. Browsers treat `localhost` and `127.0.0.1` as **different hosts** for cookies.
+Last.fm sends users back to `http://127.0.0.1:8787/auth/callback` (register that URL on your Last.fm API app). Browsers treat `localhost` and `127.0.0.1` as **different hosts** for cookies.
 
 1. Set `FRONTEND_ORIGIN` in `backend/.env` to the exact Vite URL but with **127.0.0.1** (e.g. `http://127.0.0.1:5174` if that’s the port Vite prints).
 2. Open the app in the browser at that **same** URL (not `http://localhost:...`).
 
-Then **sign in with Spotify** should complete without “State mismatch”, and your session cookie will work for `/api/...` through the Vite proxy.
+Then **sign in with Last.fm** should complete without “State mismatch”, and your session cookie will work for `/api/...` through the Vite proxy.
 
-## Spotify app settings
+## Last.fm app settings
 
-- Redirect URI: `http://127.0.0.1:8787/auth/callback` (see [Redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri))
+- Callback URL: `http://127.0.0.1:8787/auth/callback` (see [Last.fm API authentication](https://www.last.fm/api/authentication))
 
 # React + TypeScript + Vite
 

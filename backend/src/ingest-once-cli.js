@@ -29,7 +29,9 @@ if (!ch) {
 ingestOnce({
   db,
   challengeId: ch.id,
-  trackId: ch.track_id,
+  canonicalTrackId: ch.track_id,
+  campaignArtist: ch.track_artist || '',
+  campaignTrackName: ch.track_name,
   campaignStartMs: ch.starts_at_ms,
   campaignEndMs: ch.ends_at_ms,
 })

@@ -79,10 +79,10 @@ export function apiFetch(path: string, init: RequestInit = {}): Promise<Response
 }
 
 /**
- * Same-origin /auth/login — Vite proxies to Express, which redirects to Spotify.
+ * Same-origin /auth/login — Vite proxies to Express, which redirects to Last.fm.
  * @param opts.cacheBust — avoids cached OAuth redirect chains in Chrome.
  */
-export function spotifyLoginUrl(opts?: { cacheBust?: boolean }): string {
+export function lastfmLoginUrl(opts?: { cacheBust?: boolean }): string {
   const returnTo = window.location.origin
   const q = new URLSearchParams({ return: returnTo })
   if (opts?.cacheBust) q.set('cb', String(Date.now()))

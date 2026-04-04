@@ -9,12 +9,11 @@ const cron = require('node-cron')
 
 const { openDb, migratePlaysIfNeeded } = require('./db')
 const {
-  buildAuthorizeUrl,
-  exchangeCodeForTokens,
   randomString,
-  refreshAccessToken,
-  spotifyGet,
-} = require('./spotify')
+  authGetToken,
+  buildAuthorizeUrl,
+  authGetSession,
+} = require('./lastfm')
 const { ingestOnce: runIngestOnce } = require('./ingest')
 const {
   bootstrapChallengeFromEnvIfEmpty,
@@ -33,7 +32,7 @@ const DB_PATH = process.env.DB_PATH ?? './data.sqlite'
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:5173'
 const SESSION_SECRET = process.env.SESSION_SECRET ?? 'dev_secret_change_me'
 const INGEST_CRON = process.env.INGEST_CRON ?? '*/15 * * * *'
-const ARTIST_SPOTIFY_USER_ID = process.env.ARTIST_SPOTIFY_USER_ID ?? ''
+const ARTIST_LASTFM_USERNAME = (process.env.ARTIST_LASTFM_USERNAME ?? '').toLowerCase()
 
 /** Built Vite app: repo layout `web/dist` or Docker `/app/web/dist`. */
 function resolveWebDistDir() {
@@ -64,9 +63,9 @@ bootstrapChallengeFromEnvIfEmpty(db)
 syncLatestChallengeWindowFromEnvOrDefaults(db)
 migratePlaysIfNeeded(db)
 
-const BUILD_ID = 'railway-web-dist-v1'
+const BUILD_ID = 'lastfm-v1'
 
-/** Spotify redirects to 127.0.0.1:8787; persisted so nodemon/restart doesn’t drop OAuth state mid-flow. */
+/** Last.fm auth token stored in oauth_states until /auth/callback. */
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
 
 function firstQuery(val) {
@@ -274,7 +273,7 @@ function requireUser(req, res, next) {
   const row = db
     .prepare(
       `
-      select s.session_id, s.expires_at, u.id as user_id, u.spotify_user_id, u.display_name
+      select s.session_id, s.expires_at, u.id as user_id, u.lastfm_username, u.display_name
       from sessions s
       join users u on u.id = s.user_id
       where s.session_id = ?
@@ -288,13 +287,12 @@ function requireUser(req, res, next) {
     return res.status(401).json({ error: 'session_expired' })
   }
 
+  const lfUser = String(row.lastfm_username).toLowerCase()
   req.user = {
     id: row.user_id,
-    spotify_user_id: row.spotify_user_id,
+    lastfm_username: row.lastfm_username,
     display_name: row.display_name,
-    is_artist:
-      ARTIST_SPOTIFY_USER_ID &&
-      String(row.spotify_user_id) === String(ARTIST_SPOTIFY_USER_ID),
+    is_artist: Boolean(ARTIST_LASTFM_USERNAME && lfUser === ARTIST_LASTFM_USERNAME),
   }
   next()
 }
@@ -323,22 +321,21 @@ if (!HAS_WEB_DIST) {
   })
 }
 
-app.get('/auth/login', (req, res) => {
+app.get('/auth/login', async (req, res) => {
   try {
-    // Prevent browsers from caching this redirect → Spotify (otherwise “sign in” can skip accounts.spotify.com).
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     res.setHeader('Pragma', 'no-cache')
-    const state = randomString(16)
+    const token = await authGetToken()
     const trustedOrigin = requestOriginForRedirect(req)
     const returnTo =
       normalizeReturnTo(firstQuery(req.query.return), { trustedOrigin }) ??
       normalizeReturnTo(req.get('referer'), { trustedOrigin }) ??
       (trustedOrigin && !isLocalDevOrigin(trustedOrigin) ? trustedOrigin : null) ??
       FRONTEND_ORIGIN
-    rememberOAuthState(state, returnTo)
+    rememberOAuthState(token, returnTo)
     // eslint-disable-next-line no-console
-    console.log('[auth/login] returnTo=%s query.return=%s', returnTo, firstQuery(req.query.return))
-    res.redirect(302, buildAuthorizeUrl({ state }))
+    console.log('[auth/login] returnTo=%s token_prefix=%s', returnTo, String(token).slice(0, 8))
+    res.redirect(302, buildAuthorizeUrl(token))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     // eslint-disable-next-line no-console
@@ -349,32 +346,18 @@ app.get('/auth/login', (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
   try {
-    const { code, state, error } = req.query
-    if (error) {
-      const consumed = state ? consumeOAuthState(state) : null
-      const base = consumed?.returnTo ?? FRONTEND_ORIGIN
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[auth/callback] Spotify error=%s state_ok=%s base=%s',
-        String(error),
-        Boolean(consumed),
-        base,
-      )
-      return res.redirect(
-        `${base}/?auth_error=${encodeURIComponent(String(error))}`,
-      )
-    }
-    if (!code || !state) {
+    const token = firstQuery(req.query.token)
+    if (!token) {
       return res.redirect(
         302,
-        `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('missing_code_or_state')}`,
+        `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('missing_lastfm_token')}`,
       )
     }
 
-    const consumed = consumeOAuthState(state)
+    const consumed = consumeOAuthState(token)
     if (!consumed) {
       // eslint-disable-next-line no-console
-      console.warn('[auth/callback] oauth state invalid or expired (server restarted mid-flow before fix?)')
+      console.warn('[auth/callback] oauth token unknown or expired (restart mid-flow?)')
       return res.redirect(
         302,
         `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('oauth_state_invalid_retry_sign_in')}`,
@@ -382,45 +365,31 @@ app.get('/auth/callback', async (req, res) => {
     }
     const returnTo = consumed.returnTo
 
-    const tokenJson = await exchangeCodeForTokens({ code: String(code) })
-    const accessToken = tokenJson.access_token
-    const refreshToken = tokenJson.refresh_token
-    if (!accessToken || !refreshToken) {
-      return res.redirect(
-        302,
-        `${FRONTEND_ORIGIN}/?auth_error=${encodeURIComponent('missing_tokens_from_spotify')}`,
-      )
-    }
-
-    const me = await spotifyGet({ accessToken, pathAndQuery: '/me' })
-    const spotifyUserId = me.id
-    const displayName = me.display_name ?? null
-    const email =
-      typeof me.email === 'string' && me.email.trim() ? me.email.trim() : null
-
+    const { sessionKey, username } = await authGetSession(token)
+    const displayName = username
     const now = Date.now()
+
     const user = db
       .prepare(
         `
-        insert into users (spotify_user_id, display_name, email, created_at)
+        insert into users (lastfm_username, display_name, email, created_at)
         values (?, ?, ?, ?)
-        on conflict(spotify_user_id) do update set
-          display_name = excluded.display_name,
-          email = coalesce(excluded.email, users.email)
+        on conflict(lastfm_username) do update set
+          display_name = excluded.display_name
         returning id
       `,
       )
-      .get(spotifyUserId, displayName, email, now)
+      .get(username, displayName, null, now)
 
     const userId = user.id
 
     db.prepare(
       `
-      insert into tokens (user_id, refresh_token, updated_at)
+      insert into tokens (user_id, session_key, updated_at)
       values (?, ?, ?)
-      on conflict(user_id) do update set refresh_token = excluded.refresh_token, updated_at = excluded.updated_at
+      on conflict(user_id) do update set session_key = excluded.session_key, updated_at = excluded.updated_at
     `,
-    ).run(userId, refreshToken, now)
+    ).run(userId, sessionKey, now)
 
     db.prepare(
       `
@@ -518,7 +487,7 @@ app.get('/api/leaderboard', (req, res) => {
   const rows = db
     .prepare(
       `
-      select u.spotify_user_id, u.display_name, count(*) as plays
+      select u.lastfm_username, u.display_name, count(*) as plays
       from plays p
       join users u on u.id = p.user_id
       where p.challenge_id = ?
@@ -550,7 +519,7 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   const rows = db
     .prepare(
       `
-      select u.spotify_user_id, u.display_name, u.email, count(*) as plays
+      select u.lastfm_username, u.display_name, u.email, count(*) as plays
       from plays p
       join users u on u.id = p.user_id
       where p.challenge_id = ?
@@ -645,7 +614,9 @@ async function ingestOnce() {
   await runIngestOnce({
     db,
     challengeId: ch.id,
-    trackId: ch.track_id,
+    canonicalTrackId: ch.track_id,
+    campaignArtist: ch.track_artist || '',
+    campaignTrackName: ch.track_name,
     campaignStartMs: ch.starts_at_ms,
     campaignEndMs: ch.ends_at_ms,
   })
