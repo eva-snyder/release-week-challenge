@@ -244,6 +244,70 @@
   padding: 28px 0 24px;
 }
 
+/* Top streamer merch — copy + compact tee (transparent frame) */
+.band--merch {
+  border-top: 1px solid var(--border);
+  padding-bottom: 32px;
+}
+
+.merch-prize-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(16px, 4vw, 28px);
+  margin-top: 4px;
+  text-align: left;
+}
+
+.merch-prize-row__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.merch-prize-row__copy .eyebrow {
+  margin-bottom: 8px;
+}
+
+.merch-prize-row__copy h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.merch-prize-row__visual {
+  flex-shrink: 0;
+  width: min(140px, 30vw);
+  max-width: 140px;
+}
+
+.merch-prize-row__img-wrap {
+  background: transparent;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.merch-prize-row__img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  vertical-align: middle;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.35));
+}
+
+@media (max-width: 560px) {
+  .merch-prize-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .merch-prize-row__visual {
+    width: 100%;
+    max-width: 128px;
+    align-self: flex-end;
+  }
+}
+
 .challenge-banner {
   font-family: var(--font-display);
   font-size: 1.05rem;
@@ -367,6 +431,12 @@
   letter-spacing: -0.02em;
   color: var(--text-h);
   font-variant-numeric: tabular-nums;
+}
+
+.stat--value-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ——— leaderboard table ——— */

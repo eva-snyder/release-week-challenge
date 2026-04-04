@@ -349,9 +349,10 @@ function App() {
       <h2 id="stats-heading">your plays</h2>
       {session ? (
         <div className="stat-row">
-          <div className="stat">
-            <span className="stat__label">plays this window</span>
-            <span className="stat__value">{myStats?.mine.plays ?? 0}</span>
+          <div className="stat stat--value-only">
+            <span className="stat__value" aria-label="plays this challenge window">
+              {myStats?.mine.plays ?? 0}
+            </span>
           </div>
           <div className="stat">
             <span className="stat__label">rank</span>
@@ -409,6 +410,33 @@ function App() {
             </div>
           ))
         )}
+      </div>
+    </section>
+  )
+
+  const merchSection = (
+    <section className="band band--merch" aria-labelledby="merch-heading">
+      <div className="merch-prize-row">
+        <div className="merch-prize-row__copy">
+          <p className="eyebrow" id="merch-label">
+            03 — merch
+          </p>
+          <h2 id="merch-heading">this week's prize</h2>
+          <p className="body-quiet body-quiet--tight">
+            #1 on the leaderboard when the window closes wins this limited edition 'let the record show, i fell apart' tee!
+          </p>
+        </div>
+        <div className="merch-prize-row__visual">
+          <div className="merch-prize-row__img-wrap">
+            <img
+              src="/merch-top-streamer.png"
+              alt="Eva Snyder limited edition t-shirt in mustard yellow with forest green graphics, front and back"
+              className="merch-prize-row__img"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -531,17 +559,19 @@ function App() {
           <>
             {playsSection}
             {leaderboardSection}
+            {merchSection}
           </>
         ) : (
           <>
             {leaderboardSection}
             {playsSection}
+            {merchSection}
           </>
         )}
 
         {session?.user.is_artist ? (
           <section className="band band--artist" aria-labelledby="artist-heading">
-            <p className="eyebrow">03 — behind the curtain</p>
+            <p className="eyebrow">04 — behind the curtain</p>
             <h2 id="artist-heading">artist</h2>
             <div className="stat-row stat-row--tight">
               <div className="stat">
