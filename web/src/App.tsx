@@ -67,6 +67,44 @@ function datetimeLocalToIso(value: string): string {
   return new Date(value).toISOString()
 }
 
+/** Stored instants are UTC; format calendar dates in UTC so they match API / Railway (avoids “day before” in US time zones). */
+const CAMPAIGN_DISPLAY_TZ = 'UTC'
+
+function formatCampaignDate(iso: string): string {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: CAMPAIGN_DISPLAY_TZ,
+  })
+}
+
+function formatCampaignDateTimeUtc(iso: string): string {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  return d.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: CAMPAIGN_DISPLAY_TZ,
+    timeZoneName: 'short',
+  })
+}
+
+/** Remaining time as whole days + hours (same instant for everyone; `now` is client clock). */
+function formatCountdownDaysHours(msRemaining: number): string {
+  const ms = Math.max(0, msRemaining)
+  const totalHours = Math.floor(ms / (60 * 60 * 1000))
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  if (days === 0 && hours === 0) {
+    const mins = Math.floor(ms / (60 * 1000))
+    return mins <= 0 ? '0h' : `${mins}m`
+  }
+  return `${days}d ${hours}h`
+}
+
 /** After opening Last.fm in the same browser, we poll until auth.getSession succeeds (Last.fm may not redirect to /auth/callback). */
 const LASTFM_POLL_KEY = 'tl_lastfm_poll'
 const LASTFM_POLL_MAX_MS = 15 * 60 * 1000
@@ -156,6 +194,8 @@ function App() {
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
   const [lastfmSetupOpen, setLastfmSetupOpen] = useState(false)
+  /** Drives hero countdown (days/h left); ticks every minute while challenge is open or upcoming. */
+  const [countdownTick, setCountdownTick] = useState(() => Date.now())
 
   const [newChallengeTitle, setNewChallengeTitle] = useState('')
   const [newChallengeArtist, setNewChallengeArtist] = useState('')
@@ -545,14 +585,33 @@ function App() {
     [],
   )
 
-  const statusLabel = useMemo(() => {
+  useEffect(() => {
+    if (!campaign) return undefined
+    if (campaign.status === 'ended') return undefined
+    const id = window.setInterval(() => {
+      setCountdownTick(Date.now())
+    }, 60 * 1000)
+    return () => clearInterval(id)
+  }, [campaign?.id, campaign?.status])
+
+  const heroCountdown = useMemo(() => {
     if (!campaign) return null
-    if (campaign.status === 'upcoming') return 'not yet open'
-    if (campaign.status === 'ended') return 'closed'
-    const ms = campaign.endsAtMs - Date.now()
-    const d = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
-    return d <= 1 ? 'final day' : `${d} days left`
-  }, [campaign])
+    const now = countdownTick
+    if (campaign.status === 'ended') {
+      return { phase: 'ended' as const }
+    }
+    if (campaign.status === 'upcoming') {
+      const ms = campaign.startsAtMs - now
+      return {
+        phase: 'upcoming' as const,
+        text: formatCountdownDaysHours(ms),
+      }
+    }
+    return {
+      phase: 'live' as const,
+      text: formatCountdownDaysHours(campaign.endsAtMs - now),
+    }
+  }, [campaign, countdownTick])
 
   const showComingSoonBanner = ready && campaign === null
 
@@ -990,24 +1049,51 @@ function App() {
         <p className="hero__meta">
           {campaign ? (
             <>
-              {new Date(campaign.startsAt).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}{' '}
-              —{' '}
-              {new Date(campaign.endsAt).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
+              <span aria-label="Challenge window (calendar dates in UTC)">
+                opens {formatCampaignDate(campaign.startsAt)} · closes {formatCampaignDate(campaign.endsAt)}
+              </span>{' '}
+              <span className="hero__meta-tz">(UTC)</span>
             </>
           ) : ready ? (
             <span className="hero__status">waiting for a challenge</span>
           ) : null}
-          {statusLabel ? <span className="hero__dot"> · </span> : null}
-          {statusLabel ? <span className="hero__status">{statusLabel}</span> : null}
         </p>
+        {campaign && heroCountdown ? (
+          heroCountdown.phase === 'ended' ? (
+            <p className="hero__countdown">challenge closed</p>
+          ) : (
+            <>
+              <p className="hero__countdown" aria-live="polite">
+                {heroCountdown.phase === 'upcoming' ? (
+                  <>
+                    <span className="hero__countdown-value">{heroCountdown.text}</span> until the challenge
+                    opens
+                  </>
+                ) : (
+                  <>
+                    <span className="hero__countdown-value">{heroCountdown.text}</span> left in the
+                    challenge
+                  </>
+                )}
+              </p>
+              <p className="hero__tz-note">
+                {heroCountdown.phase === 'upcoming' ? (
+                  <>
+                    Same countdown everywhere — listening counts start at one instant worldwide; only the
+                    local time on your clock differs. Dates above are UTC (start is inclusive at midnight UTC on
+                    the first date).
+                  </>
+                ) : (
+                  <>
+                    Same countdown everywhere — the challenge ends at one instant worldwide; only the date on
+                    your clock changes by timezone. Dates above are UTC; the end is exclusive at midnight UTC on
+                    the closing date.
+                  </>
+                )}
+              </p>
+            </>
+          )
+        ) : null}
         <div className="hero__rule" aria-hidden />
       </header>
 
@@ -1188,13 +1274,8 @@ function App() {
             {campaign?.status === 'live' || campaign?.status === 'upcoming' ? (
               <p className="body-quiet artist-tools__note">
                 Scrobbles are polled until{' '}
-                {campaign
-                  ? new Date(campaign.endsAt).toLocaleString(undefined, {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })
-                  : ''}
-                . Ingest stops when the window closes.
+                {campaign ? formatCampaignDateTimeUtc(campaign.endsAt) : ''}. Ingest stops when the
+                window closes.
               </p>
             ) : null}
             <button

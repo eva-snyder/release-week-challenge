@@ -233,6 +233,42 @@
   color: var(--text-muted);
 }
 
+.hero__meta-tz {
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+}
+
+.hero__countdown {
+  margin: 12px auto 0;
+  max-width: 40ch;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+  line-height: 1.4;
+}
+
+.hero__countdown-value {
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero__tz-note {
+  margin: 10px auto 0;
+  max-width: 44ch;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-wrap: balance;
+}
+
+.hero__tz-note strong {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
 .hero__dot {
   opacity: 0.5;
 }
