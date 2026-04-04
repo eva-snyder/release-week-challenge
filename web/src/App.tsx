@@ -41,15 +41,30 @@ type Campaign = {
   spotifyTrackSi?: string | null
 }
 
+/** Match backend `DEFAULT_SPOTIFY_*` so the hero links to the track even if /api/campaign omits ids. */
+const DEFAULT_SPOTIFY_TRACK_ID = '3aFYGT0C4zbMH6EQ1kdqcf'
+const DEFAULT_SPOTIFY_SI = '0744d99d23bf402d'
+
 function spotifyOpenUrl(c: Campaign): string {
-  const id = c.spotifyTrackId?.trim()
-  if (id) {
-    const si = c.spotifyTrackSi?.trim()
-    const base = `https://open.spotify.com/track/${id}`
-    if (si) return `${base}?si=${encodeURIComponent(si)}`
-    return base
-  }
-  return `https://open.spotify.com/search/${encodeURIComponent(`${c.trackName} ${c.trackArtist}`.trim())}`
+  const id = (c.spotifyTrackId?.trim() || DEFAULT_SPOTIFY_TRACK_ID).trim()
+  const si = (c.spotifyTrackSi?.trim() || DEFAULT_SPOTIFY_SI).trim()
+  const base = `https://open.spotify.com/track/${id}`
+  if (si) return `${base}?si=${encodeURIComponent(si)}`
+  return base
+}
+
+function isoToDatetimeLocal(iso: string): string {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function datetimeLocalToIso(value: string): string {
+  if (!value.trim()) return ''
+  const t = new Date(value).getTime()
+  if (!Number.isFinite(t)) return ''
+  return new Date(value).toISOString()
 }
 
 /** After opening Last.fm in the same browser, we poll until auth.getSession succeeds (Last.fm may not redirect to /auth/callback). */
@@ -140,6 +155,12 @@ function App() {
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
   const [lastfmSetupOpen, setLastfmSetupOpen] = useState(false)
+
+  const [newChallengeTitle, setNewChallengeTitle] = useState('')
+  const [newChallengeArtist, setNewChallengeArtist] = useState('')
+  const [newChallengeTrack, setNewChallengeTrack] = useState('')
+  const [newChallengeStarts, setNewChallengeStarts] = useState('')
+  const [newChallengeEnds, setNewChallengeEnds] = useState('')
 
   function formatNetworkError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e)
@@ -262,6 +283,15 @@ function App() {
 
     return nextSession
   }, [])
+
+  useEffect(() => {
+    if (!campaign) return
+    setNewChallengeTitle(campaign.title)
+    setNewChallengeArtist(campaign.trackArtist)
+    setNewChallengeTrack(campaign.trackName)
+    setNewChallengeStarts(isoToDatetimeLocal(campaign.startsAt))
+    setNewChallengeEnds(isoToDatetimeLocal(campaign.endsAt))
+  }, [campaign?.id])
 
   useEffect(() => {
     if (session) return
@@ -1052,6 +1082,102 @@ function App() {
                 <span className="stat__value">{myStats?.campaign.total_plays ?? 0}</span>
               </div>
             </div>
+            <details className="artist-new-challenge">
+              <summary className="artist-new-challenge__summary">start a new challenge</summary>
+              <p className="body-quiet body-quiet--tight artist-new-challenge__explainer">
+                Creates a <strong>new</strong> challenge in the site database with a fresh leaderboard. Past plays
+                stay tied to older challenges for your records. This does <strong>not</strong> change Railway
+                environment variables — set <code>CAMPAIGN_*</code> there separately if you want ingest / hero
+                defaults to match (or rely on code defaults).
+              </p>
+              <form
+                className="artist-new-challenge__form"
+                onSubmit={(ev) => {
+                  ev.preventDefault()
+                  void run(async () => {
+                    const startsAt = datetimeLocalToIso(newChallengeStarts)
+                    const endsAt = datetimeLocalToIso(newChallengeEnds)
+                    if (!startsAt || !endsAt) {
+                      throw new Error('Choose a start and end date/time.')
+                    }
+                    const res = await apiFetch('/api/admin/challenge', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: newChallengeTitle.trim(),
+                        trackArtist: newChallengeArtist.trim(),
+                        trackName: newChallengeTrack.trim(),
+                        startsAt,
+                        endsAt,
+                      }),
+                    })
+                    const errBody = (await res.json().catch(() => ({}))) as { error?: string }
+                    if (!res.ok) {
+                      if (errBody.error === 'invalid_window') {
+                        throw new Error('End must be after start.')
+                      }
+                      if (errBody.error === 'missing_fields') {
+                        throw new Error('Fill in title, artist, track, start, and end.')
+                      }
+                      throw new Error('Could not create challenge. Try again.')
+                    }
+                    await refreshDashboard()
+                    setNotice('new challenge created — counts start fresh for this window.')
+                  })
+                }}
+              >
+                <label className="artist-new-challenge__field">
+                  <span className="artist-new-challenge__label">title</span>
+                  <input
+                    className="artist-new-challenge__input"
+                    value={newChallengeTitle}
+                    onChange={(e) => setNewChallengeTitle(e.target.value)}
+                    autoComplete="off"
+                    placeholder="e.g. spring release challenge"
+                  />
+                </label>
+                <label className="artist-new-challenge__field">
+                  <span className="artist-new-challenge__label">artist (must match Last.fm scrobbles)</span>
+                  <input
+                    className="artist-new-challenge__input"
+                    value={newChallengeArtist}
+                    onChange={(e) => setNewChallengeArtist(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="artist-new-challenge__field">
+                  <span className="artist-new-challenge__label">track name (must match Last.fm)</span>
+                  <input
+                    className="artist-new-challenge__input"
+                    value={newChallengeTrack}
+                    onChange={(e) => setNewChallengeTrack(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="artist-new-challenge__field">
+                  <span className="artist-new-challenge__label">starts</span>
+                  <input
+                    className="artist-new-challenge__input"
+                    type="datetime-local"
+                    value={newChallengeStarts}
+                    onChange={(e) => setNewChallengeStarts(e.target.value)}
+                  />
+                </label>
+                <label className="artist-new-challenge__field">
+                  <span className="artist-new-challenge__label">ends</span>
+                  <input
+                    className="artist-new-challenge__input"
+                    type="datetime-local"
+                    value={newChallengeEnds}
+                    onChange={(e) => setNewChallengeEnds(e.target.value)}
+                  />
+                </label>
+                <button type="submit" className="btn btn--primary" disabled={busy}>
+                  create new challenge
+                </button>
+              </form>
+            </details>
+
             {campaign?.status === 'live' || campaign?.status === 'upcoming' ? (
               <p className="body-quiet artist-tools__note">
                 Scrobbles are polled until{' '}

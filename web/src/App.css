@@ -631,6 +631,87 @@
   box-sizing: border-box;
 }
 
+.artist-new-challenge {
+  margin: 0 0 16px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  max-width: 100%;
+}
+
+.artist-new-challenge__summary {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.artist-new-challenge__summary::-webkit-details-marker {
+  display: none;
+}
+
+.artist-new-challenge__summary::before {
+  content: '▸ ';
+  opacity: 0.7;
+}
+
+.artist-new-challenge[open] .artist-new-challenge__summary::before {
+  content: '▾ ';
+}
+
+.artist-new-challenge__explainer {
+  margin: 10px 0 14px;
+  max-width: 52ch;
+}
+
+.artist-new-challenge__explainer code {
+  font-size: 0.85em;
+}
+
+.artist-new-challenge__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 28rem;
+}
+
+.artist-new-challenge__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.artist-new-challenge__label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--text-muted);
+}
+
+.artist-new-challenge__input {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-h);
+  box-sizing: border-box;
+}
+
+.artist-new-challenge__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.artist-new-challenge__form .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
 .artist-tools__note {
   margin-bottom: 12px;
 }

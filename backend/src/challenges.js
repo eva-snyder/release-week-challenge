@@ -5,6 +5,10 @@
 const DEFAULT_CAMPAIGN_STARTS_AT = '2026-03-27T00:00:00Z'
 const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-06T00:00:00Z'
 
+/** Hero Spotify link when CAMPAIGN_TRACK_ID / CAMPAIGN_SPOTIFY_TRACK_ID are unset (e.g. prod env not configured). */
+const DEFAULT_SPOTIFY_TRACK_ID = '3aFYGT0C4zbMH6EQ1kdqcf'
+const DEFAULT_SPOTIFY_SI = '0744d99d23bf402d'
+
 const { normalizeMeta } = require('./lastfm')
 
 function campaignWindowMsFromEnvOrDefaults() {
@@ -142,9 +146,11 @@ function getChallengeForDisplay(db, now = Date.now()) {
 
 function rowToCampaignPayload(row, status) {
   const spotifyTrackId =
-    String(process.env.CAMPAIGN_SPOTIFY_TRACK_ID ?? process.env.CAMPAIGN_TRACK_ID ?? '').trim() || null
+    String(process.env.CAMPAIGN_SPOTIFY_TRACK_ID ?? process.env.CAMPAIGN_TRACK_ID ?? '').trim() ||
+    DEFAULT_SPOTIFY_TRACK_ID
   const spotifyTrackSi =
-    String(process.env.CAMPAIGN_SPOTIFY_SI ?? process.env.CAMPAIGN_TRACK_SI ?? '').trim() || null
+    String(process.env.CAMPAIGN_SPOTIFY_SI ?? process.env.CAMPAIGN_TRACK_SI ?? '').trim() ||
+    DEFAULT_SPOTIFY_SI
   return {
     id: String(row.id),
     title: row.title,
