@@ -3,7 +3,7 @@
  * Override with CAMPAIGN_STARTS_AT / CAMPAIGN_ENDS_AT (e.g. on Railway) anytime.
  */
 const DEFAULT_CAMPAIGN_STARTS_AT = '2026-03-27T00:00:00Z'
-const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-01T00:00:00Z'
+const DEFAULT_CAMPAIGN_ENDS_AT = '2026-04-05T00:00:00Z'
 
 const { normalizeMeta } = require('./lastfm')
 
