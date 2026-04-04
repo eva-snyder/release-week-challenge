@@ -1066,36 +1066,19 @@ function App() {
           heroCountdown.phase === 'ended' ? (
             <p className="hero__countdown">challenge closed</p>
           ) : (
-            <>
-              <p className="hero__countdown" aria-live="polite">
-                {heroCountdown.phase === 'upcoming' ? (
-                  <>
-                    <span className="hero__countdown-value">{heroCountdown.text}</span> until the challenge
-                    opens
-                  </>
-                ) : (
-                  <>
-                    <span className="hero__countdown-value">{heroCountdown.text}</span> left in the
-                    challenge
-                  </>
-                )}
-              </p>
-              <p className="hero__tz-note">
-                {heroCountdown.phase === 'upcoming' ? (
-                  <>
-                    Same countdown everywhere — listening counts start at one instant worldwide; only the
-                    local time on your clock differs. Dates above are UTC (start is inclusive at midnight UTC on
-                    the first date).
-                  </>
-                ) : (
-                  <>
-                    Same countdown everywhere — the challenge ends at one instant worldwide; only the date on
-                    your clock changes by timezone. Dates above are UTC; the end is exclusive at midnight UTC on
-                    the closing date.
-                  </>
-                )}
-              </p>
-            </>
+            <p className="hero__countdown" aria-live="polite">
+              {heroCountdown.phase === 'upcoming' ? (
+                <>
+                  <span className="hero__countdown-value">{heroCountdown.text}</span> until the challenge
+                  opens
+                </>
+              ) : (
+                <>
+                  <span className="hero__countdown-value">{heroCountdown.text}</span> left in the
+                  challenge
+                </>
+              )}
+            </p>
           )
         ) : null}
         <div className="hero__rule" aria-hidden />

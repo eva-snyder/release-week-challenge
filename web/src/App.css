@@ -254,21 +254,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.hero__tz-note {
-  margin: 10px auto 0;
-  max-width: 44ch;
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--text-muted);
-  text-wrap: balance;
-}
-
-.hero__tz-note strong {
-  color: var(--text-h);
-  font-weight: 600;
-}
-
 .hero__dot {
   opacity: 0.5;
 }
