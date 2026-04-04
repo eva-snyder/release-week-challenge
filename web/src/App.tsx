@@ -132,6 +132,18 @@ function App() {
         setMyStats({ mine: mJson.mine, campaign: mJson.campaign })
       }
     } else {
+      // Stale cookie / sessionStorage id (new deploy, DB reset, multiple replicas, rotated SESSION_SECRET).
+      if (sRes.status === 401) {
+        try {
+          const j = (await sRes.json()) as { error?: string }
+          if (j.error === 'invalid_session' || j.error === 'session_expired') {
+            clearStoredSessionId()
+            await apiFetch('/auth/logout', { method: 'POST' })
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       setSession(null)
       setMyStats(null)
       setLeaderboardContacts([])
