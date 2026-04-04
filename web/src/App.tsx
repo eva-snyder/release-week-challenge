@@ -222,7 +222,7 @@ function App() {
     setLeaderboard(lbJson.rows ?? [])
 
     if (nextSession?.user.is_artist) {
-      const contRes = await apiFetch('/api/admin/leaderboard-contacts?limit=10')
+      const contRes = await apiFetch('/api/admin/leaderboard-contacts')
       if (contRes.ok) {
         const contJson = (await contRes.json()) as {
           rows?: Array<{
@@ -556,7 +556,7 @@ function App() {
           </p>
           <h2 id="lb-heading">leaderboard</h2>
           <p className="body-quiet body-quiet--tight">
-            top ten for this challenge window. auto-refreshes every 15s for 2 minutes after each quarter-hour (UTC).
+            top ten for this challenge window. refreshes each quarter-hour.
           </p>
         </div>
         <button
@@ -1056,7 +1056,7 @@ function App() {
             </button>
 
             <div className="artist-contacts">
-              <h3 className="artist-contacts__title">listeners (top 10)</h3>
+              <h3 className="artist-contacts__title">listeners</h3>
               <p className="body-quiet body-quiet--tight">
                 Prize email and shipping come from the winner form after the window closes. The &ldquo;news
                 opt-in&rdquo; column is from the optional form below the merch block (not Last.fm).

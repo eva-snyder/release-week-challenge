@@ -701,10 +701,11 @@ app.get('/api/leaderboard', (req, res) => {
   })
 })
 
-/** Same ordering as /api/leaderboard but includes sign-in email for prize / shipping follow-up (artist only). */
+/** Same ordering as /api/leaderboard but includes sign-in email for prize / shipping follow-up (artist only).
+ *  Everyone with a Last.fm token is listed (plays for this challenge may be 0). Optional `limit` caps rows (default 10000, max 10000). */
 app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   if (!req.user.is_artist) return res.status(403).json({ error: 'forbidden' })
-  const limit = Math.min(50, Math.max(1, Number(req.query?.limit ?? 10)))
+  const limit = Math.min(10000, Math.max(1, Number(req.query?.limit ?? 10000)))
   const c = getChallengeForDisplay(db)
   if (!c) {
     return res.json({ ok: true, challenge_id: null, rows: [] })
@@ -712,11 +713,16 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   const rows = db
     .prepare(
       `
-      select u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in, count(*) as plays
-      from plays p
-      join users u on u.id = p.user_id
-      where p.challenge_id = ?
-      group by p.user_id
+      select u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in,
+             coalesce(pp.plays, 0) as plays
+      from users u
+      join tokens t on t.user_id = u.id
+      left join (
+        select user_id, count(*) as plays
+        from plays
+        where challenge_id = ?
+        group by user_id
+      ) pp on pp.user_id = u.id
       order by plays desc, u.lastfm_username asc
       limit ?
     `,
