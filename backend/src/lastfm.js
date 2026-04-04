@@ -123,6 +123,7 @@ async function userGetRecentTracks(opts) {
 
 /**
  * Normalize for case-insensitive artist/track comparison.
+ * Maps Unicode ellipsis (…) to three dots so "maybe…" and "maybe..." match Last.fm either way.
  * @param {string} s
  */
 function normalizeMeta(s) {
@@ -130,6 +131,7 @@ function normalizeMeta(s) {
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u2026/g, '...')
     .replace(/\s+/g, ' ')
     .trim()
 }

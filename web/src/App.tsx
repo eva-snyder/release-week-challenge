@@ -1172,6 +1172,11 @@ function App() {
                     onChange={(e) => setNewChallengeEnds(e.target.value)}
                   />
                 </label>
+                <p className="body-quiet body-quiet--tight artist-new-challenge__hint" role="note">
+                  End time is <strong>exclusive</strong> (the challenge stops at that instant). To include all of
+                  the last day — e.g. all of April 15 — set end to <strong>midnight on the next day</strong>{' '}
+                  (April 16 12:00 AM) or 11:59 PM on the last day.
+                </p>
                 <button type="submit" className="btn btn--primary" disabled={busy}>
                   create new challenge
                 </button>
