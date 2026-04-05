@@ -1039,7 +1039,7 @@ function App() {
         ) : campaign ? (
           <>
             <p className="hero__tagline">
-              be the top listener by spotify streams this week to win limited edition merch!
+              stream the challenge track the most times this week to win limited edition merch!
             </p>
             <p className="hero__track">
               <span className="hero__track-label">this week&apos;s challenge track:</span>{' '}
