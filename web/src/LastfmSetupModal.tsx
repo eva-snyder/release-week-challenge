@@ -51,7 +51,8 @@ export function LastfmSetupModal({ open, onClose }: Props) {
             </a>
           </li>
           <li>
-            <strong>Connect Spotify</strong> so listens become scrobbles.{' '}
+            <strong>Connect Spotify to Last.fm</strong> so your <strong>spotify streams</strong> become
+            scrobbles this site can count.{' '}
             <a href={LASTFM_SPOTIFY_SETTINGS_URL} target="_blank" rel="noopener noreferrer">
               open last.fm → apps / spotify
             </a>
@@ -59,7 +60,7 @@ export function LastfmSetupModal({ open, onClose }: Props) {
           <li>
             <strong>Link this challenge site to last.fm</strong> — close this window, then tap{' '}
             <strong>I have last.fm</strong> and approve access. that&apos;s different from logging into last.fm;
-            it lets this site read your plays for the challenge.
+            it lets this site read your challenge plays (spotify streams we get from last.fm).
           </li>
         </ol>
         <div className="lf-modal__actions">

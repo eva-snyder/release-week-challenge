@@ -627,9 +627,12 @@ function App() {
       <h2 id="stats-heading">your plays</h2>
       {session ? (
         <>
+          <p className="body-quiet body-quiet--tight">
+            spotify streams of this track that last.fm has scrobbled during the challenge window.
+          </p>
           <div className="stat-row">
             <div className="stat stat--value-only">
-              <span className="stat__value" aria-label="plays this challenge window">
+              <span className="stat__value" aria-label="Spotify streams this challenge window (via Last.fm)">
                 {myStats?.mine.plays ?? 0}
               </span>
             </div>
@@ -651,7 +654,7 @@ function App() {
         </>
       ) : (
         <p className="body-quiet">
-          sign in above to see your plays and rank here.
+          sign in above to see your spotify stream count and rank here.
         </p>
       )}
     </section>
@@ -666,7 +669,7 @@ function App() {
           </p>
           <h2 id="lb-heading">leaderboard</h2>
           <p className="body-quiet body-quiet--tight">
-            top ten for this challenge window. refreshes every 15 minutes.
+            top ten listeners by spotify streams for this challenge window. refreshes every 15 minutes.
           </p>
           <p className="body-quiet body-quiet--tight">
             if there&apos;s a tie for the most plays, the tee prize goes to one person chosen at random
@@ -1036,7 +1039,7 @@ function App() {
         ) : campaign ? (
           <>
             <p className="hero__tagline">
-              be the top listener this week to win limited edition merch!
+              be the top listener by spotify streams this week to win limited edition merch!
             </p>
             <p className="hero__track">
               <span className="hero__track-label">this week&apos;s challenge track:</span>{' '}
@@ -1091,8 +1094,8 @@ function App() {
       {!session ? (
         <div className="auth-cta" aria-label="Link Last.fm or open setup guide">
           <p className="auth-cta__intro">
-            we count plays through last.fm. already have an account? link it. if not, open the short setup
-            guide first.
+            we count <strong>spotify streams</strong> of the challenge track (via last.fm scrobbles). already
+            have last.fm? link it. if not, open the short setup guide first.
           </p>
           <div className="auth-signin">
             <div className="auth-signin__actions">
@@ -1351,7 +1354,7 @@ function App() {
 
       <footer className="footer">
         <p className="footer__line">
-          connect spotify to last.fm so streams show up. if you win,
+          connect spotify to last.fm so your spotify streams show up as plays here. if you win,
           we&apos;ll ask for email and a shipping address on this site at the end of the challenge window for the tee.
         </p>
       </footer>
