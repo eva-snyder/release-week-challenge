@@ -1057,6 +1057,18 @@ button.btn--text.btn--inline {
   margin: 0 0 16px;
 }
 
+.lf-modal__hint {
+  margin: 0 0 16px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.lf-modal__hint strong {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
 .lf-modal__steps {
   margin: 0 0 22px;
   padding-left: 1.2rem;

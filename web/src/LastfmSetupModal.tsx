@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL } from './authUrl'
+import { LASTFM_JOIN_URL, LASTFM_SPOTIFY_SETTINGS_URL } from './authUrl'
 
 type Props = {
   open: boolean
@@ -23,11 +23,6 @@ export function LastfmSetupModal({ open, onClose }: Props) {
 
   if (!open) return null
 
-  function openLastfm() {
-    window.open(LASTFM_ACCOUNT_AND_SPOTIFY_SETUP_URL, '_blank', 'noopener,noreferrer')
-    onClose()
-  }
-
   return (
     <div className="lf-modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -41,19 +36,35 @@ export function LastfmSetupModal({ open, onClose }: Props) {
           new to last.fm?
         </h2>
         <p className="body-quiet lf-modal__lede">
-          Do this on Last.fm first, then come back here and tap sign in with last.fm in the corner.
+          three steps. last.fm won&apos;t always send you back here automatically — when you&apos;re done with a
+          step, <strong>switch back to this tab</strong> or open this site again from your home screen.
+        </p>
+        <p className="body-quiet lf-modal__hint" role="note">
+          if a page doesn&apos;t load (e.g. error 406), use <strong>open in safari or chrome</strong> from the
+          browser menu — not instagram or messages&apos; built-in browser.
         </p>
         <ol className="lf-modal__steps">
-          <li>Create a Last.fm account — the link opens their sign-up page, then sends you to connect apps.</li>
-          <li>Connect Spotify so your listens count as scrobbles (Last.fm will prompt you).</li>
-          <li>Verify your email if Last.fm asks — check your inbox for their link.</li>
+          <li>
+            <strong>Create a Last.fm account.</strong>{' '}
+            <a href={LASTFM_JOIN_URL} target="_blank" rel="noopener noreferrer">
+              open sign-up
+            </a>
+          </li>
+          <li>
+            <strong>Connect Spotify</strong> so listens become scrobbles.{' '}
+            <a href={LASTFM_SPOTIFY_SETTINGS_URL} target="_blank" rel="noopener noreferrer">
+              open last.fm → apps / spotify
+            </a>
+          </li>
+          <li>
+            <strong>Link this challenge site to last.fm</strong> — close this window, then tap{' '}
+            <strong>I have last.fm</strong> and approve access. that&apos;s different from logging into last.fm;
+            it lets this site read your plays for the challenge.
+          </li>
         </ol>
         <div className="lf-modal__actions">
-          <button type="button" className="btn btn--primary" onClick={openLastfm}>
-            continue to last.fm
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
-            close
+          <button type="button" className="btn btn--primary" onClick={onClose}>
+            got it — close
           </button>
         </div>
       </div>

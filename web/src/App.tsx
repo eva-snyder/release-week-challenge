@@ -1089,10 +1089,10 @@ function App() {
       </header>
 
       {!session ? (
-        <div className="auth-cta" aria-label="Join this challenge">
+        <div className="auth-cta" aria-label="Link Last.fm or open setup guide">
           <p className="auth-cta__intro">
-            join with last.fm to count your listens for this release. sign in if you already use last.fm, or
-            tap set up to create an account and link Spotify.
+            we count plays through last.fm. already have an account? link it. if not, open the short setup
+            guide first.
           </p>
           <div className="auth-signin">
             <div className="auth-signin__actions">
@@ -1110,14 +1110,14 @@ function App() {
                   setLastfmPollKick((k) => k + 1)
                 }}
               >
-                sign in with last.fm
+                I have last.fm
               </a>
               <button
                 type="button"
                 className="btn btn--ghost"
                 onClick={() => setLastfmSetupOpen(true)}
               >
-                set up last.fm + Spotify
+                new to last.fm?
               </button>
             </div>
           </div>
