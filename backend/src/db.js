@@ -231,6 +231,18 @@ function migrateUsersMarketingOptInIfNeeded(db) {
   db.exec('alter table users add column marketing_opt_in integer not null default 0')
 }
 
+/** Prize winner persisted after a grace window; resolution complete even when no plays (winner_user_id null). */
+function migrateChallengesWinnerIfNeeded(db) {
+  const cols = db.prepare('pragma table_info(challenges)').all()
+  const names = cols.map((c) => c.name)
+  if (!names.includes('winner_user_id')) {
+    db.exec('alter table challenges add column winner_user_id integer')
+  }
+  if (!names.includes('winner_resolved_at_ms')) {
+    db.exec('alter table challenges add column winner_resolved_at_ms integer')
+  }
+}
+
 function openDb(dbPath) {
   const db = new Database(dbPath)
   initDb(db)
@@ -239,6 +251,7 @@ function openDb(dbPath) {
   migrateUsersEmailIfNeeded(db)
   migrateUsersPrizeContactIfNeeded(db)
   migrateUsersMarketingOptInIfNeeded(db)
+  migrateChallengesWinnerIfNeeded(db)
   return db
 }
 

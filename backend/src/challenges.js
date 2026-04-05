@@ -119,7 +119,7 @@ function getChallengeForDisplay(db, now = Date.now()) {
   const active = db
     .prepare(
       `
-      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms
+      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms, winner_user_id, winner_resolved_at_ms
       from challenges
       where starts_at_ms <= ? and ends_at_ms > ?
       order by id desc
@@ -132,7 +132,7 @@ function getChallengeForDisplay(db, now = Date.now()) {
   const last = db
     .prepare(
       `
-      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms
+      select id, title, track_id, track_name, track_artist, starts_at_ms, ends_at_ms, winner_user_id, winner_resolved_at_ms
       from challenges
       order by id desc
       limit 1

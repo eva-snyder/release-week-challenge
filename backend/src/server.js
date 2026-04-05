@@ -1,6 +1,5 @@
 require('dotenv').config()
 
-const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const express = require('express')
@@ -19,6 +18,10 @@ const {
 /** Logged on auth routes + /health — if Railway logs show different ids for /auth/login vs /auth/callback, you have multiple replicas (SQLite OAuth breaks). */
 const INSTANCE_ID = randomString(8)
 const { ingestOnce: runIngestOnce } = require('./ingest')
+const {
+  resolveDueChallengeWinners,
+  WINNER_RESOLVE_DELAY_MS,
+} = require('./challengeWinner')
 const {
   bootstrapChallengeFromEnvIfEmpty,
   insertChallenge,
@@ -67,6 +70,7 @@ const db = openDb(DB_PATH)
 bootstrapChallengeFromEnvIfEmpty(db)
 syncLatestChallengeWindowFromEnvOrDefaults(db)
 migratePlaysIfNeeded(db)
+resolveDueChallengeWinners(db)
 
 const BUILD_ID = 'lastfm-v1'
 
@@ -371,12 +375,8 @@ function getSessionIdFromRequest(req) {
   return null
 }
 
-/**
- * Single prize winner for a challenge. If several users tie for max plays, one is chosen
- * deterministically (same for every request) using PRIZE_TIE_BREAK_SECRET or SESSION_SECRET.
- * @returns {number | null} user id or null if nobody has plays for this challenge
- */
-function getPrizeTieBreakUserId(db, challengeId) {
+/** Count how many users share the top play count (for messaging). */
+function getPrizeTieMeta(db, challengeId) {
   const rows = db
     .prepare(
       `
@@ -388,19 +388,120 @@ function getPrizeTieBreakUserId(db, challengeId) {
     `,
     )
     .all(challengeId)
-  if (rows.length === 0) return null
+  if (rows.length === 0) return { maxPlays: 0, tieCount: 0 }
   const maxPlays = Number(rows[0].plays)
-  const tied = rows.filter((r) => Number(r.plays) === maxPlays).map((r) => r.user_id)
-  if (tied.length === 0) return null
-  if (tied.length === 1) return tied[0]
-  const sorted = [...tied].sort((a, b) => a - b)
-  const salt = String(
-    process.env.PRIZE_TIE_BREAK_SECRET ?? process.env.SESSION_SECRET ?? 'dev-prize-tie-break',
-  )
-  const payload = `${challengeId}:${sorted.join(',')}:${salt}`
-  const hash = crypto.createHash('sha256').update(payload).digest()
-  const idx = hash.readUInt32BE(0) % sorted.length
-  return sorted[idx]
+  const tieCount = rows.filter((r) => Number(r.plays) === maxPlays).length
+  return { maxPlays, tieCount }
+}
+
+/** Latest challenge that has fully ended (by end time), or null. Includes winner columns. */
+function getMostRecentEndedChallenge(db, now = Date.now()) {
+  return db
+    .prepare(
+      `
+      select id, title, winner_user_id, winner_resolved_at_ms, ends_at_ms
+      from challenges
+      where ends_at_ms <= ?
+      order by ends_at_ms desc
+      limit 1
+    `,
+    )
+    .get(now)
+}
+
+/** Artist admin: most recent ended challenge winner (stored after grace window). */
+function getRecentEndedChallengeWinnerPayload(db, now = Date.now()) {
+  resolveDueChallengeWinners(db, now)
+  const ch = getMostRecentEndedChallenge(db, now)
+  if (!ch) return null
+  const resolveAtMs = ch.ends_at_ms + WINNER_RESOLVE_DELAY_MS
+  if (!ch.winner_resolved_at_ms) {
+    return {
+      challenge_id: ch.id,
+      challenge_title: ch.title,
+      resolution_pending: true,
+      resolve_at_ms: resolveAtMs,
+      winner: null,
+    }
+  }
+  const tie = getPrizeTieMeta(db, ch.id)
+  if (ch.winner_user_id == null) {
+    return {
+      challenge_id: ch.id,
+      challenge_title: ch.title,
+      resolution_pending: false,
+      had_tie: tie.tieCount > 1,
+      tie_count: tie.tieCount,
+      winner: null,
+      no_plays: true,
+    }
+  }
+  const u = db
+    .prepare('select lastfm_username, display_name from users where id = ?')
+    .get(ch.winner_user_id)
+  return {
+    challenge_id: ch.id,
+    challenge_title: ch.title,
+    resolution_pending: false,
+    had_tie: tie.tieCount > 1,
+    tie_count: tie.tieCount,
+    winner: u
+      ? {
+          lastfm_username: u.lastfm_username,
+          display_name: u.display_name,
+        }
+      : null,
+  }
+}
+
+/** Map user id → challenge titles won (stored winner only), all ended + resolved challenges. */
+function buildChallengesWonByUser(db, now = Date.now()) {
+  const ended = db
+    .prepare(
+      `
+      select id, title, winner_user_id, winner_resolved_at_ms
+      from challenges
+      where ends_at_ms <= ?
+      order by id asc
+    `,
+    )
+    .all(now)
+  const map = new Map()
+  for (const ch of ended) {
+    if (!ch.winner_resolved_at_ms || ch.winner_user_id == null) continue
+    const wid = ch.winner_user_id
+    const arr = map.get(wid) ?? []
+    arr.push(ch.title)
+    map.set(wid, arr)
+  }
+  return map
+}
+
+function enrichCampaignPayload(db, row, status, now = Date.now()) {
+  const base = rowToCampaignPayload(row, status)
+  const resolveAtMs = row.ends_at_ms + WINNER_RESOLVE_DELAY_MS
+  const resolved = row.winner_resolved_at_ms != null
+  let winnerLastfmUsername = null
+  let winnerDisplayName = null
+  if (resolved && row.winner_user_id != null) {
+    const u = db
+      .prepare('select lastfm_username, display_name from users where id = ?')
+      .get(row.winner_user_id)
+    if (u) {
+      winnerLastfmUsername = u.lastfm_username
+      winnerDisplayName = u.display_name
+    }
+  }
+  return {
+    ...base,
+    winnerResolveAtMs: resolveAtMs,
+    winnerResolved: resolved,
+    winnerLastfmUsername,
+    winnerDisplayName,
+    winnerPending: status === 'ended' && !resolved && now < resolveAtMs,
+    winnerSelecting: status === 'ended' && !resolved && now >= resolveAtMs,
+    winnerNoPlays: status === 'ended' && resolved && row.winner_user_id == null,
+  }
 }
 
 function requireUser(req, res, next) {
@@ -648,13 +749,15 @@ app.get('/api/session', requireUser, (req, res) => {
 })
 
 app.get('/api/campaign', (_req, res) => {
-  const c = getChallengeForDisplay(db)
+  const now = Date.now()
+  resolveDueChallengeWinners(db, now)
+  const c = getChallengeForDisplay(db, now)
   if (!c) {
     return res.json({ ok: true, campaign: null })
   }
   res.json({
     ok: true,
-    campaign: rowToCampaignPayload(c.row, c.status),
+    campaign: enrichCampaignPayload(db, c.row, c.status, now),
   })
 })
 
@@ -668,6 +771,7 @@ app.post('/api/me/delete', requireUser, (req, res) => {
 })
 
 app.get('/api/leaderboard', (req, res) => {
+  resolveDueChallengeWinners(db)
   const limit = Math.min(50, Math.max(1, Number(req.query?.limit ?? 10)))
   const c = getChallengeForDisplay(db)
   if (!c) {
@@ -706,14 +810,22 @@ app.get('/api/leaderboard', (req, res) => {
 app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
   if (!req.user.is_artist) return res.status(403).json({ error: 'forbidden' })
   const limit = Math.min(10000, Math.max(1, Number(req.query?.limit ?? 10000)))
+  resolveDueChallengeWinners(db)
   const c = getChallengeForDisplay(db)
   if (!c) {
-    return res.json({ ok: true, challenge_id: null, rows: [] })
+    return res.json({
+      ok: true,
+      challenge_id: null,
+      recent_ended_challenge_winner: getRecentEndedChallengeWinnerPayload(db),
+      rows: [],
+    })
   }
+  const now = Date.now()
+  const wonMap = buildChallengesWonByUser(db, now)
   const rows = db
     .prepare(
       `
-      select u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in,
+      select u.id as user_id, u.lastfm_username, u.display_name, u.email, u.mailing_address, u.shirt_size, u.marketing_opt_in,
              coalesce(pp.plays, 0) as plays,
              (select count(*) from plays p3 where p3.user_id = u.id) as total_all_challenges
       from users u
@@ -730,10 +842,19 @@ app.get('/api/admin/leaderboard-contacts', requireUser, (req, res) => {
     )
     .all(c.row.id, limit)
 
+  const rowsOut = rows.map(r => {
+    const { user_id: uid, ...rest } = r
+    return {
+      ...rest,
+      challenges_won: wonMap.get(uid) ?? [],
+    }
+  })
+
   res.json({
     ok: true,
     challenge_id: c.row.id,
-    rows,
+    recent_ended_challenge_winner: getRecentEndedChallengeWinnerPayload(db, now),
+    rows: rowsOut,
   })
 })
 
@@ -817,13 +938,18 @@ app.put('/api/me/contact-preferences', requireUser, (req, res) => {
 })
 
 app.put('/api/me/prize-contact', requireUser, (req, res) => {
+  resolveDueChallengeWinners(db)
   const c = getChallengeForDisplay(db)
   if (!c || c.status !== 'ended') {
     return res.status(403).json({ error: 'prize_claim_not_open' })
   }
-  const challengeId = c.row.id
-  const winnerId = getPrizeTieBreakUserId(db, challengeId)
-  if (winnerId == null || winnerId !== req.user.id) {
+  if (!c.row.winner_resolved_at_ms) {
+    return res.status(403).json({ error: 'winner_not_resolved' })
+  }
+  if (c.row.winner_user_id == null) {
+    return res.status(403).json({ error: 'no_challenge_winner' })
+  }
+  if (c.row.winner_user_id !== req.user.id) {
     return res.status(403).json({ error: 'not_challenge_winner' })
   }
 
@@ -855,6 +981,7 @@ app.put('/api/me/prize-contact', requireUser, (req, res) => {
 })
 
 app.get('/api/me/stats', requireUser, (req, res) => {
+  resolveDueChallengeWinners(db)
   const c = getChallengeForDisplay(db)
   if (!c) {
     return res.json({
@@ -916,9 +1043,13 @@ app.get('/api/me/stats', requireUser, (req, res) => {
   const myRank = myCount > 0 ? Number(rankRow?.rank ?? null) : null
 
   let isPrizeWinner = false
-  if (c.status === 'ended' && myCount > 0) {
-    const prizeUserId = getPrizeTieBreakUserId(db, challengeId)
-    isPrizeWinner = prizeUserId != null && prizeUserId === req.user.id
+  if (
+    c.status === 'ended' &&
+    c.row.winner_resolved_at_ms &&
+    c.row.winner_user_id != null &&
+    req.user.id === c.row.winner_user_id
+  ) {
+    isPrizeWinner = true
   }
 
   res.json({
@@ -947,6 +1078,14 @@ async function ingestOnce() {
 
 cron.schedule(INGEST_CRON, () => {
   ingestOnce().catch(() => {})
+})
+
+cron.schedule(process.env.WINNER_RESOLVE_CRON ?? '* * * * *', () => {
+  try {
+    resolveDueChallengeWinners(db)
+  } catch {
+    /* ignore */
+  }
 })
 
 /**
@@ -983,7 +1122,7 @@ app.post('/api/admin/challenge', requireUser, (req, res) => {
   res.json({
     ok: true,
     challenge_id: id,
-    campaign: rowToCampaignPayload(row, status),
+    campaign: enrichCampaignPayload(db, row, status, now),
   })
 })
 

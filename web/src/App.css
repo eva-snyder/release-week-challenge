@@ -254,6 +254,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.hero__track-ended {
+  font-style: italic;
+}
+
 .hero__dot {
   opacity: 0.5;
 }
@@ -753,6 +757,21 @@
   margin: 0 0 8px;
 }
 
+/* Full-width explainer (beats global .body-quiet max-width) */
+.artist-contacts__lede {
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.artist-contacts__winner {
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
 .artist-contacts__table {
   margin-top: 12px;
   overflow-x: auto;
@@ -761,8 +780,8 @@
 .artist-contacts__row {
   display: grid;
   grid-template-columns:
-    2rem minmax(4rem, 0.85fr) minmax(5rem, 1fr) auto auto minmax(6rem, 1fr) minmax(2.5rem, 0.55fr)
-    minmax(7rem, 1.1fr) minmax(2.5rem, 0.5fr);
+    2rem minmax(4rem, 0.75fr) minmax(5rem, 1fr) auto auto minmax(5rem, 1.1fr) minmax(6rem, 1fr)
+    minmax(2.5rem, 0.55fr) minmax(7rem, 1.1fr) minmax(2.5rem, 0.5fr);
   gap: 10px;
   align-items: baseline;
   padding: 8px 0;
@@ -785,6 +804,12 @@
   font-family: var(--font-mono);
   font-size: 0.78rem;
   word-break: break-all;
+}
+
+.artist-contacts__won {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .artist-contacts__ship {
