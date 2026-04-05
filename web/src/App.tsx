@@ -1359,7 +1359,18 @@ function App() {
         </p>
       </footer>
 
-      <LastfmSetupModal open={lastfmSetupOpen} onClose={() => setLastfmSetupOpen(false)} />
+      <LastfmSetupModal
+        open={lastfmSetupOpen}
+        onClose={() => setLastfmSetupOpen(false)}
+        onAuthLinkClick={() => {
+          try {
+            localStorage.setItem(LASTFM_POLL_KEY, String(Date.now()))
+          } catch {
+            /* ignore */
+          }
+          setLastfmPollKick((k) => k + 1)
+        }}
+      />
     </div>
   )
 }

@@ -1078,11 +1078,31 @@ button.btn--text.btn--inline {
 }
 
 .lf-modal__steps li {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .lf-modal__steps li:last-child {
   margin-bottom: 0;
+}
+
+/* Match default “link purple” */
+.lf-modal__steps a {
+  color: #a78bfa;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.lf-modal__steps a:hover {
+  color: #c4b5fd;
+}
+
+.lf-modal__done {
+  margin: 0 0 18px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-h);
 }
 
 .lf-modal__actions {
