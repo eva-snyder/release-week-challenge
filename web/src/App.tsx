@@ -1219,7 +1219,7 @@ function App() {
                     closed.
                   </>
                 ) : (
-                  'Challenge closed.'
+                  'Challenge closed'
                 )}
               </p>
             )
