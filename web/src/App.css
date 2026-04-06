@@ -1130,6 +1130,18 @@ button.btn--text.btn--inline {
   color: var(--text-h);
 }
 
+.lf-modal__notice-lede {
+  margin: 0 0 22px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-h);
+}
+
+.lf-modal__notice-lede strong {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
 .lf-modal__actions {
   display: flex;
   flex-direction: column;
