@@ -1218,19 +1218,22 @@ function App() {
         ) : (
           <p className="hero__lede">no challenge yet.</p>
         )}
-        <p className="hero__meta">
-          {displayCampaign ? (
-            <>
-              <span aria-label="Challenge window (calendar dates in UTC)">
-                opens {formatCampaignDate(displayCampaign.startsAt)} · closes{' '}
-                {formatCampaignDate(displayCampaign.endsAt)}
-              </span>{' '}
-              <span className="hero__meta-tz">(UTC)</span>
-            </>
-          ) : ready ? (
-            <span className="hero__status">waiting for a challenge</span>
-          ) : null}
-        </p>
+        {displayCampaign &&
+        (!CHALLENGE_ACTIVE || heroCountdown?.phase === 'live') ? null : (
+          <p className="hero__meta">
+            {displayCampaign ? (
+              <>
+                <span aria-label="Challenge window (calendar dates in UTC)">
+                  opens {formatCampaignDate(displayCampaign.startsAt)} · closes{' '}
+                  {formatCampaignDate(displayCampaign.endsAt)}
+                </span>{' '}
+                <span className="hero__meta-tz">(UTC)</span>
+              </>
+            ) : ready ? (
+              <span className="hero__status">waiting for a challenge</span>
+            ) : null}
+          </p>
+        )}
         {displayCampaign && heroCountdown ? (
           heroCountdown.phase === 'ended' ? (
             displayCampaign.winnerResolved && displayCampaign.winnerNoPlays ? (
@@ -1270,19 +1273,10 @@ function App() {
                 )}
               </p>
             )
-          ) : (
+          ) : heroCountdown.phase === 'live' ? null : (
             <p className="hero__countdown" aria-live="polite">
-              {heroCountdown.phase === 'upcoming' ? (
-                <>
-                  <span className="hero__countdown-value">{heroCountdown.text}</span> until the challenge
-                  opens
-                </>
-              ) : (
-                <>
-                  <span className="hero__countdown-value">{heroCountdown.text}</span> left in the
-                  challenge
-                </>
-              )}
+              <span className="hero__countdown-value">{heroCountdown.text}</span> until the challenge
+              opens
             </p>
           )
         ) : null}
