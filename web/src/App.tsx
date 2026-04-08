@@ -149,31 +149,25 @@ function heroTrackChallengeClosedPrefix(trackName: string) {
   )
 }
 
-function ChallengePausedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ChallengePausedModal({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = prev
-      document.removeEventListener('keydown', onKey)
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
   return (
-    <div className="lf-modal-backdrop challenge-paused-backdrop" role="presentation" onClick={onClose}>
+    <div className="lf-modal-backdrop challenge-paused-backdrop" role="presentation">
       <div
         className="lf-modal challenge-paused-modal"
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="challenge-paused-title"
-        onClick={(e) => e.stopPropagation()}
       >
         <h2 id="challenge-paused-title" className="lf-modal__title">
           Challenge paused
@@ -182,11 +176,6 @@ function ChallengePausedModal({ open, onClose }: { open: boolean; onClose: () =>
           This challenge is closed right now while we figure out how to align with Spotify&apos;s terms of
           service.
         </p>
-        <div className="lf-modal__actions">
-          <button type="button" className="btn btn--primary" onClick={onClose}>
-            OK
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -292,7 +281,6 @@ function App() {
   /** Bumped when starting Last.fm sign-in so the poll effect re-runs (localStorage alone does not re-render). */
   const [lastfmPollKick, setLastfmPollKick] = useState(0)
   const [lastfmSetupOpen, setLastfmSetupOpen] = useState(false)
-  const [challengePausedModalOpen, setChallengePausedModalOpen] = useState(() => !CHALLENGE_ACTIVE)
   /** Drives hero countdown (days/h left); ticks every minute while challenge is open or upcoming. */
   const [countdownTick, setCountdownTick] = useState(() => Date.now())
 
@@ -1610,10 +1598,7 @@ function App() {
           setLastfmPollKick((k) => k + 1)
         }}
       />
-      <ChallengePausedModal
-        open={!CHALLENGE_ACTIVE && challengePausedModalOpen}
-        onClose={() => setChallengePausedModalOpen(false)}
-      />
+      <ChallengePausedModal open={!CHALLENGE_ACTIVE} />
     </div>
   )
 }
